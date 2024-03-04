@@ -65,6 +65,10 @@ public class NodeService implements UDPService {
         this.commitMessages = new MessageBucket(nodesConfig.length);
     }
 
+    public void sendTestMessage(String nodeId, Message message){
+        link.send(nodeId, message);
+    }
+
     public ProcessConfig getConfig() {
         return this.config;
     }
@@ -347,6 +351,9 @@ public class NodeService implements UDPService {
                 try {
                     while (true) {
                         Message message = link.receive();
+
+                        // non verified messages
+                        if (message == null) return;
 
                         // Separate thread to handle each message
                         new Thread(() -> {
