@@ -1,9 +1,9 @@
 import pt.ulisboa.tecnico.hdsledger.service.Node;
 
 import org.junit.jupiter.api.Test;
-import static org.junit.Assert.*;
+import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.InjectMocks;
-
 
 //Tests to make:
 // 1. Test reaction when node sends incorrect message
@@ -18,7 +18,7 @@ public class NodeTest {
 
     @Test
     public void testNode() {
-        Node node = new Node();
-        assertNotNull(node);
+        Node node = new Node("1", "src/main/resources/config.json", "src/main/resources/client_config.json");
+
     }
 }

@@ -81,15 +81,23 @@ public class NodeService implements UDPService {
         return this.config;
     }
 
-    public int getConsensusInstance() {
-        return this.consensusInstance.get();
+    public AtomicInteger getConsensusInstance() {
+        return this.consensusInstance;
+    }
+
+    public int getLastDecidedConsensusInstance() {
+        return this.lastDecidedConsensusInstance.get();
+    }
+
+    public Map<Integer, InstanceInfo> getInstanceInfo() {
+        return this.instanceInfo;
     }
 
     public ArrayList<String> getLedger() {
         return this.ledger;
     }
 
-    private boolean isLeader(String id) {
+    public boolean isLeader(String id) {
         return this.leaderConfig.getId().equals(id);
     }
 
@@ -115,7 +123,7 @@ public class NodeService implements UDPService {
     public void startConsensus(String value) {
 
         // Set initial consensus values
-        int localConsensusInstance = this.consensusInstance.incrementAndGet();
+        int localConsensusInstance = getConsensusInstance().incrementAndGet();
         InstanceInfo existingConsensus = this.instanceInfo.put(localConsensusInstance, new InstanceInfo(value));
 
         // If startConsensus was already called for a given round
@@ -365,8 +373,8 @@ public class NodeService implements UDPService {
     public void handleClientRequest(Message message) {
         if (this.config.isLeader()) {
             this.startConsensus(message.getValue());
-        } 
-        // This should maybe 
+        }
+        // This should maybe
         this.clientRequestID = message.getSenderId();
     }
 
@@ -412,7 +420,7 @@ public class NodeService implements UDPService {
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received IGNORE message from {1}",
                                                     config.getId(), message.getSenderId()));
-                                
+
                                 case CLIENT_CONFIRMATION ->
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received CLIENT_CONFIRMATION message from {1}",
