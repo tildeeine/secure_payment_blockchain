@@ -20,8 +20,8 @@ public class Node {
     private static String clientsConfigPath = "src/main/resources/client_config.json";
     private static String id;
 
-    private final Link linkToNodes;
-    private final NodeService nodeService;
+    private Link linkToNodes;
+    private NodeService nodeService;
 
     public Node(String id, String nodesConfigPath, String clientsConfigPath) {
         try {
