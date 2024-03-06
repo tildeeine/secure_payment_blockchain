@@ -29,6 +29,8 @@ public class Link {
     private final DatagramSocket socket;
     // Map of all nodes in the network
     private final Map<String, ProcessConfig> nodes = new ConcurrentHashMap<>();
+    private final Map<String, ProcessConfig> clients = new ConcurrentHashMap<>();
+
     // Reference to the node itself
     private final ProcessConfig config;
     // Class to deserialize messages to
@@ -42,11 +44,13 @@ public class Link {
     // Send messages to self by pushing to queue instead of through the network
     private final Queue<Message> localhostQueue = new ConcurrentLinkedQueue<>();
 
-    public Link(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass) {
+    public Link(ProcessConfig self, int port, ProcessConfig[] nodes,
+            Class<? extends Message> messageClass) {
         this(self, port, nodes, messageClass, false, 200);
     }
 
-    public Link(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass,
+    public Link(ProcessConfig self, int port, ProcessConfig[] nodes,
+            Class<? extends Message> messageClass,
             boolean activateLogs, int baseSleepTime) {
 
         this.config = self;
@@ -73,11 +77,19 @@ public class Link {
         receivedAcks.addAll(messageIds);
     }
 
+    public void addClient(ProcessConfig[] clients) {
+        Arrays.stream(clients).forEach(client -> {
+            String id = client.getId();
+            this.clients.put(id, client);
+            receivedMessages.put(id, new CollapsingSet());
+        });
+    }
+
     /*
      * Broadcasts a message to all nodes in the network
      *
      * @param data The message to be broadcasted
-     */ 
+     */
     public void broadcast(Message data) {
         Gson gson = new Gson();
         nodes.forEach((destId, dest) -> send(destId, gson.fromJson(gson.toJson(data), data.getClass())));
@@ -97,6 +109,9 @@ public class Link {
         new Thread(() -> {
             try {
                 ProcessConfig node = nodes.get(nodeId);
+                if (node == null) {
+                    node = clients.get(nodeId);
+                }
                 if (node == null)
                     throw new HDSSException(ErrorMessage.NoSuchNode);
 
@@ -119,8 +134,6 @@ public class Link {
 
                     return;
                 }
-
-                
 
                 for (;;) {
                     LOGGER.log(Level.INFO, MessageFormat.format(
@@ -147,9 +160,8 @@ public class Link {
         }).start();
     }
 
-
     // Create digital signature with sender node private key
-    public byte[] sign(byte[] data) throws Exception {   
+    public byte[] sign(byte[] data) throws Exception {
         Signature sig = Signature.getInstance("SHA256withRSA");
         PrivateKey key = this.config.getPrivateKey();
 
@@ -159,7 +171,6 @@ public class Link {
         return signature;
     }
 
-
     // Send message signed with digital signature
     public void authenticatedSend(InetAddress hostname, int port, Message data) {
         byte[] buf = new Gson().toJson(data).getBytes();
@@ -168,6 +179,7 @@ public class Link {
         try {
             signature = sign(buf);
         } catch (Exception e) {
+            System.out.println("Error signing message");
             return;
         }
 
@@ -218,19 +230,17 @@ public class Link {
                 System.out.println("Signature verified!");
                 return true;
             }
-         
+
         } catch (Exception e) {
             return false;
         }
     }
-
 
     /*
      * Receives a message from any node in the network (blocking)
      */
     public Message receive() throws IOException, ClassNotFoundException {
 
-        System.out.println("Received a message");
         Message message = null;
         String serialized = "";
         Boolean local = false;
@@ -238,7 +248,7 @@ public class Link {
 
         if (this.localhostQueue.size() > 0) {
             message = this.localhostQueue.poll();
-            local = true; 
+            local = true;
             this.receivedAcks.add(message.getMessageId());
         } else {
             byte[] buf = new byte[65535];
@@ -249,11 +259,11 @@ public class Link {
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
 
             // Split message into message and signature
-            byte[] m = new byte[buffer.length-128];
+            byte[] m = new byte[buffer.length - 128];
             byte[] signature = new byte[128];
-            System.arraycopy(buffer, 0, m, 0, buffer.length-128);
-            System.arraycopy(buffer, buffer.length-128, signature, 0, 128);
-            
+            System.arraycopy(buffer, 0, m, 0, buffer.length - 128);
+            System.arraycopy(buffer, buffer.length - 128, signature, 0, 128);
+
             serialized = new String(m);
             message = new Gson().fromJson(serialized, Message.class);
 
@@ -266,10 +276,9 @@ public class Link {
         String senderId = message.getSenderId();
         int messageId = message.getMessageId();
 
-        if (!nodes.containsKey(senderId))
+        if (!nodes.containsKey(senderId) && !senderId.contains("client"))
             throw new HDSSException(ErrorMessage.NoSuchNode);
-        
- 
+
         // Handle ACKS, since it's possible to receive multiple acks from the same
 
         // message
@@ -309,7 +318,8 @@ public class Link {
                 if (consensusMessage.getReplyTo() != null && consensusMessage.getReplyTo().equals(config.getId()))
                     receivedAcks.add(consensusMessage.getReplyToMessageId());
             }
-            default -> {}
+            default -> {
+            }
         }
 
         // Send ack
@@ -326,7 +336,7 @@ public class Link {
             // it will discard duplicates
             authenticatedSend(address, port, responseMessage);
         }
-        
+
         return message;
     }
 }
