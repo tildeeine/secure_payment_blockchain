@@ -12,6 +12,8 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.*;
+
+import java.beans.Transient;
 import java.util.Arrays;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -32,11 +34,13 @@ public class NodeServiceTest {
 
     private static NodeService leaderNodeService;
     private static NodeService nodeService;
+    private static NodeService byzantineNode;
 
     private static String nodesConfigPath = "src/test/resources/test_config.json";
     private static String clientsConfigPath = "src/test/resources/client_test_config.json";
-    private static String nodeId = "2";
-    private static String leaderId = "1";
+    private static String nodeId = "node";
+    private static String leaderId = "leader";
+    private static String byzantineNodeId = "byzantineNode";
     private static String clientId = "client1";
 
     // Creating mock objects
@@ -45,6 +49,9 @@ public class NodeServiceTest {
 
     @Mock
     private Link mockLeaderLink;
+
+    @Mock
+    private Link mockbyzantineNodeLink;
 
     @Mock
     private ProcessConfig mockProcessConfig;
@@ -62,6 +69,7 @@ public class NodeServiceTest {
     public void setUp() {
         leaderNodeService = nodeSetup(leaderId, mockLeaderLink);
         nodeService = nodeSetup(nodeId, mockNodeLink);
+        byzantineNode = nodeSetup(byzantineNodeId, mockbyzantineNodeLink);
     }
 
     public NodeService nodeSetup(String id, Link link) {
@@ -91,6 +99,8 @@ public class NodeServiceTest {
 
     // Test that the uponPrePrepare method sends a PREPARE message upon receiving a
     // PRE-PREPARE message from the leader
+    // TODO check that sends ACK on valid PRE-PREPARE
+    // TODO check that sends IGNORE on invalid PRE-PREPARE
     @Test
     public void test_uponPrePrepare_leader() {
         // Mock that sender is leader
@@ -159,5 +169,32 @@ public class NodeServiceTest {
         // Verify that handleClientRequest does not start a new consensus instance
         verify(mockNodeLink, times(0)).broadcast(any());
     }
+
+    @Test
+    public void test_incorrectMessage() {
+        ConsensusMessage incorrectMessage = new ConsensusMessage(byzantineNodeId, Message.Type.PRE_PREPARE);
+
+        nodeService.listen(); // Set normal node to listen
+
+    }
+
+    // TODO verify that uponCommit sends a CLIENT_CONFIRMATION message when
+    // consensus is achieved
+
+    // TODO Verify appropriate handling of invalid messages
+
+    // TODO Ensure algorithm can still reach consensus even if some nodes behave
+    // byzantinely
+
+    // TODO Verify that ledger is consistent among all nodes after consensus is
+    // reached
+
+    // TODO test concurrent client requests
+
+    // TODO test node crashes during consensus
+
+    // TODO test leader crashes during consensus
+
+    // TODO test timeout handling for consensus
 
 }
