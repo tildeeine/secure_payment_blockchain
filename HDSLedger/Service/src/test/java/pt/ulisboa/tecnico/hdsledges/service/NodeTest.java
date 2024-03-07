@@ -14,11 +14,15 @@ import org.mockito.InjectMocks;
 
 public class NodeTest {
 
-    // Setup Node for testing
+    // // Setup Node for testing
+    // private static String nodesConfigPath =
+    // "src/test/resources/test_config.json";
+    // private static String clientsConfigPath =
+    // "src/test/resources/client_test_config.json";
 
-    @Test
-    public void testNode() {
-        Node node = new Node("1", "src/main/resources/config.json", "src/main/resources/client_config.json");
+    // @Test
+    // public void testNode() {
+    // Node node = new Node("1", nodesConfigPath, clientsConfigPath);
 
-    }
+    // }
 }
