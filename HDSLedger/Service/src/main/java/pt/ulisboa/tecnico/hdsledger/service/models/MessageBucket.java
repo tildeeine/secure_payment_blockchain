@@ -42,6 +42,11 @@ public class MessageBucket {
     public Optional<String> hasValidPrepareQuorum(String nodeId, int instance, int round) {
         // Create mapping of value to frequency
         HashMap<String, Integer> frequency = new HashMap<>();
+        // System.out.println(bucket.get(instance));
+        for (int key : bucket.keySet()) {
+            System.out.println("KEYYYY");
+            System.out.println(key);
+        }
         bucket.get(instance).get(round).values().forEach((message) -> {
             PrepareMessage prepareMessage = message.deserializePrepareMessage();
             String value = prepareMessage.getValue();

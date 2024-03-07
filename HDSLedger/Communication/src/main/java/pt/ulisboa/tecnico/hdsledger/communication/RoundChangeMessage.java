@@ -12,6 +12,8 @@ public class RoundChangeMessage extends Message {
     private int prepared_round;
 
     private String prepared_value;
+
+    private ConsensusMessage prepareMessage;
     
     public RoundChangeMessage(String senderId, Type type, int consensusInstance, int round, int prepared_round, String prepared_value) {
         super(senderId, type);
@@ -19,6 +21,15 @@ public class RoundChangeMessage extends Message {
         this.round = round;
         this.prepared_round = prepared_round;
         this.prepared_value = prepared_value;
+        this.prepareMessage = null;
+    }
+
+    public void setPrepareMessage(ConsensusMessage prepareMessage) {
+        this.prepareMessage = prepareMessage;
+    }
+
+    public ConsensusMessage getPrepareMessage() {
+        return this.prepareMessage;
     }
 
     public int getConsensusInstance() {
