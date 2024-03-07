@@ -25,6 +25,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.service.services.NodeService;
 import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.communication.PrePrepareMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
 
 @ExtendWith(MockitoExtension.class)
 public class NodeServiceTest {
@@ -49,7 +50,10 @@ public class NodeServiceTest {
     private ProcessConfig mockProcessConfig;
 
     @Mock
-    private ConsensusMessage mockMessage;
+    private ConsensusMessage mockConsensusMessage;
+
+    @Mock
+    private ClientMessage mockClientMessage;
 
     @Mock
     private PrePrepareMessage mockPrePrepareMessage;
@@ -90,11 +94,11 @@ public class NodeServiceTest {
     @Test
     public void test_uponPrePrepare_leader() {
         // Mock that sender is leader
-        when(mockMessage.getSenderId()).thenReturn(leaderId);
-        when(mockMessage.deserializePrePrepareMessage()).thenReturn(mockPrePrepareMessage);
+        when(mockConsensusMessage.getSenderId()).thenReturn(leaderId);
+        when(mockConsensusMessage.deserializePrePrepareMessage()).thenReturn(mockPrePrepareMessage);
         when(mockPrePrepareMessage.getValue()).thenReturn("val");
         // Call method
-        leaderNodeService.uponPrePrepare(mockMessage);
+        leaderNodeService.uponPrePrepare(mockConsensusMessage);
 
         // Verify that uponPrePrepare broadcasts a message
         verify(mockLeaderLink, times(1)).broadcast(argThat(argument -> {
@@ -112,12 +116,12 @@ public class NodeServiceTest {
     @Test
     public void test_uponPrePrepare_nonLeader() {
         // Mock that sender is not leader
-        when(mockMessage.getSenderId()).thenReturn(nodeId);
-        when(mockMessage.deserializePrePrepareMessage()).thenReturn(mockPrePrepareMessage);
+        when(mockConsensusMessage.getSenderId()).thenReturn(nodeId);
+        when(mockConsensusMessage.deserializePrePrepareMessage()).thenReturn(mockPrePrepareMessage);
         when(mockPrePrepareMessage.getValue()).thenReturn("val");
 
         // Call method
-        nodeService.uponPrePrepare(mockMessage);
+        nodeService.uponPrePrepare(mockConsensusMessage);
 
         // Verify that uponPrePrepare does not broadcast any message
         verify(mockNodeLink, times(0)).broadcast(any());
@@ -128,11 +132,11 @@ public class NodeServiceTest {
     // broadcasts the necessary messages when the node is the leader.
     @Test
     public void test_handleClientRequest_leader() {
-        when(mockMessage.getSenderId()).thenReturn(clientId);
-        when(mockMessage.getValue()).thenReturn("val");
+        when(mockClientMessage.getSenderId()).thenReturn(clientId);
+        when(mockClientMessage.getValue()).thenReturn("val");
 
         // Call method
-        leaderNodeService.handleClientRequest(mockMessage);
+        leaderNodeService.handleClientRequest(mockClientMessage);
 
         // Verify that startConsensus broadcasts a PRE-PREPARE message
         verify(mockLeaderLink, times(1)).broadcast(argThat(argument -> {
@@ -150,7 +154,7 @@ public class NodeServiceTest {
     @Test
     public void test_handleClientRequest_notLeader() {
         // Call method
-        nodeService.handleClientRequest(mockMessage);
+        nodeService.handleClientRequest(mockClientMessage);
 
         // Verify that handleClientRequest does not start a new consensus instance
         verify(mockNodeLink, times(0)).broadcast(any());
