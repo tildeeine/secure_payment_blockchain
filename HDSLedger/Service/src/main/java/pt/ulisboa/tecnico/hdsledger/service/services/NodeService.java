@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
+import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
@@ -497,18 +498,14 @@ public class NodeService implements UDPService {
                             "{0} - Decided on Consensus Instance {1}, Round {2}, Successful? {3}",
                             config.getId(), consensusInstance, round, true));
             if (this.config.isLeader()) {
-                // TODO: Modify this such that the client that sends the request to the server
-                // application gets the answer
-                // What if the leader gets changes during the round?
-                // What if multiple client requests are handled asynchrounously.
-                Message confirmationMessage = new Message(config.getId(), Message.Type.CLIENT_CONFIRMATION);
-                confirmationMessage.setValue(message.getValue());
+                ClientMessage confirmationMessage = new ClientMessage(config.getId(), Message.Type.CLIENT_CONFIRMATION);
+                confirmationMessage.setValue(value);
                 link.send(clientRequestID, confirmationMessage);
             }
         }
     }
 
-    public void handleClientRequest(Message message) {
+    public void handleClientRequest(ClientMessage message) {
         
         this.startConsensus(message.getValue());
         
@@ -538,7 +535,7 @@ public class NodeService implements UDPService {
                             switch (message.getType()) {
 
                                 case APPEND -> {
-                                    this.handleClientRequest(message);
+                                    handleClientRequest((ClientMessage) message);
                                 }
 
                                 case PRE_PREPARE ->
@@ -564,10 +561,12 @@ public class NodeService implements UDPService {
                                                     config.getId(), message.getSenderId()));
                                 
                                 case CLIENT_CONFIRMATION ->
+                                    {
+                                        ClientMessage confirmationMessage = (ClientMessage) message;
                                     LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Received CLIENT_CONFIRMATION message from {1}",
-                                                    config.getId(), message.getSenderId()));
-
+                                            MessageFormat.format("{0} - Received CLIENT_CONFIRMATION message from {1}, value {2} appended to the ledger",
+                                                    config.getId(), message.getSenderId(), confirmationMessage.getValue()));
+                                    }
                                 default ->
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received unknown message from {1}",

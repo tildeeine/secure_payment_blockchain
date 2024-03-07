@@ -293,7 +293,10 @@ public class Link {
             if (message.getType().equals(Message.Type.ROUND_CHANGE)) {
                 message = new Gson().fromJson(serialized, RoundChangeMessage.class);
             }
-            
+            else if (message.getType().equals(Message.Type.APPEND) || message.getType().equals(Message.Type.CLIENT_CONFIRMATION)){
+                message = new Gson().fromJson(serialized, ClientMessage.class);
+            }
+
             else {
                 message = new Gson().fromJson(serialized, this.messageClass);
             }
