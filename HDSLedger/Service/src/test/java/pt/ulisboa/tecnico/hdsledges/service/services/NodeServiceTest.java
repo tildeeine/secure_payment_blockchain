@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.beans.Transient;
 import java.util.Arrays;
@@ -27,7 +28,9 @@ import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.service.services.NodeService;
 import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.communication.PrePrepareMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.RoundChangeMessage;
 
 @ExtendWith(MockitoExtension.class)
 public class NodeServiceTest {
@@ -51,7 +54,7 @@ public class NodeServiceTest {
     private Link mockLeaderLink;
 
     @Mock
-    private Link mockbyzantineNodeLink;
+    private Link mockByzantineNodeLink;
 
     @Mock
     private ProcessConfig mockProcessConfig;
@@ -60,16 +63,22 @@ public class NodeServiceTest {
     private ConsensusMessage mockConsensusMessage;
 
     @Mock
+    private RoundChangeMessage mockRoundChangeMessage;
+
+    @Mock
     private ClientMessage mockClientMessage;
 
     @Mock
     private PrePrepareMessage mockPrePrepareMessage;
 
+    @Mock
+    private Message mockPrepareMessage;
+
     @BeforeEach
     public void setUp() {
         leaderNodeService = nodeSetup(leaderId, mockLeaderLink);
         nodeService = nodeSetup(nodeId, mockNodeLink);
-        byzantineNode = nodeSetup(byzantineNodeId, mockbyzantineNodeLink);
+        byzantineNode = nodeSetup(byzantineNodeId, mockByzantineNodeLink);
     }
 
     public NodeService nodeSetup(String id, Link link) {
@@ -99,10 +108,8 @@ public class NodeServiceTest {
 
     // Test that the uponPrePrepare method sends a PREPARE message upon receiving a
     // PRE-PREPARE message from the leader
-    // TODO check that sends ACK on valid PRE-PREPARE
-    // TODO check that sends IGNORE on invalid PRE-PREPARE
     @Test
-    public void test_uponPrePrepare_leader() {
+    public void testUponPrePrepareLeader() {
         // Mock that sender is leader
         when(mockConsensusMessage.getSenderId()).thenReturn(leaderId);
         when(mockConsensusMessage.deserializePrePrepareMessage()).thenReturn(mockPrePrepareMessage);
@@ -124,7 +131,7 @@ public class NodeServiceTest {
     // Test that the uponPrePrepare method does not send a PREPARE message upon
     // receiving PRE-PREPARE message from a non-leader
     @Test
-    public void test_uponPrePrepare_nonLeader() {
+    public void testUponPrePrepareNonLeader() {
         // Mock that sender is not leader
         when(mockConsensusMessage.getSenderId()).thenReturn(nodeId);
         when(mockConsensusMessage.deserializePrePrepareMessage()).thenReturn(mockPrePrepareMessage);
@@ -141,7 +148,7 @@ public class NodeServiceTest {
     // consensus instance, updates the relevant internal data structures, and
     // broadcasts the necessary messages when the node is the leader.
     @Test
-    public void test_handleClientRequest_leader() {
+    public void testHandleClientRequestLeader() {
         when(mockClientMessage.getSenderId()).thenReturn(clientId);
         when(mockClientMessage.getValue()).thenReturn("val");
 
@@ -162,39 +169,12 @@ public class NodeServiceTest {
     // Test that handleClientRequest does not start a new consensus instance when
     // the node is not the leader.
     @Test
-    public void test_handleClientRequest_notLeader() {
+    public void testHandleClientRequestNotLeader() {
         // Call method
         nodeService.handleClientRequest(mockClientMessage);
 
         // Verify that handleClientRequest does not start a new consensus instance
         verify(mockNodeLink, times(0)).broadcast(any());
     }
-
-    @Test
-    public void test_incorrectMessage() {
-        ConsensusMessage incorrectMessage = new ConsensusMessage(byzantineNodeId, Message.Type.PRE_PREPARE);
-
-        nodeService.listen(); // Set normal node to listen
-
-    }
-
-    // TODO verify that uponCommit sends a CLIENT_CONFIRMATION message when
-    // consensus is achieved
-
-    // TODO Verify appropriate handling of invalid messages
-
-    // TODO Ensure algorithm can still reach consensus even if some nodes behave
-    // byzantinely
-
-    // TODO Verify that ledger is consistent among all nodes after consensus is
-    // reached
-
-    // TODO test concurrent client requests
-
-    // TODO test node crashes during consensus
-
-    // TODO test leader crashes during consensus
-
-    // TODO test timeout handling for consensus
 
 }
