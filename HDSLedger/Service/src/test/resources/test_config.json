@@ -1,0 +1,20 @@
+[
+    {
+        "id": "leader",
+        "isLeader": true,
+        "hostname": "localhost",
+        "port": 3106
+    },
+    {
+        "id": "node",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3107
+    },
+    {
+        "id": "byzantineNode",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3108
+    }
+]
