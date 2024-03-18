@@ -1,10 +1,16 @@
-package test.java.pt.ulisboa.tecnico.hdsledges.service.services;
+package pt.ulisboa.tecnico.hdsledger.service.services;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import test.pt.ulisboa.tecnico.hdsledgers.service.services.TestableNodeService;
+import java.util.Arrays;
+
+import pt.ulisboa.tecnico.hdsledger.communication.Link;
+import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
+import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfigBuilder;
 
 public class NodeServiceCrashTest {
     // Class to test byzantine behaviour

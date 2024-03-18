@@ -23,7 +23,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.RoundChangeMessage;
 
 @ExtendWith(MockitoExtension.class)
-public class NodeServiceTest {
+public class Old {
 
     private static NodeService leaderNodeService;
     private static NodeService nodeService;
