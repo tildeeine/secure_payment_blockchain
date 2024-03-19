@@ -49,7 +49,7 @@ public class MessageBucket {
         }
         bucket.get(instance).get(round).values().forEach((message) -> {
             PrepareMessage prepareMessage = message.deserializePrepareMessage();
-            String value = prepareMessage.getValue();
+            String value = prepareMessage.getClientData().getValue();
             frequency.put(value, frequency.getOrDefault(value, 0) + 1);
         });
 

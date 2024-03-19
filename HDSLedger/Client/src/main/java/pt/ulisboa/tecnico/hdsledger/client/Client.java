@@ -1,8 +1,8 @@
 package pt.ulisboa.tecnico.hdsledger.client;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
-import pt.ulisboa.tecnico.hdsledger.communication.Message;
-import pt.ulisboa.tecnico.hdsledger.service.services.NodeService;
+import pt.ulisboa.tecnico.hdsledger.client.services.ClientMessageBuilder;
+import pt.ulisboa.tecnico.hdsledger.client.services.ClientService;
 import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
@@ -21,6 +21,8 @@ public class Client {
 
     private static final String CLIENTCONFIGPATH = "src/main/resources/client_config.json";
     private static final String NODECONFIGPATH = "src/main/resources/regular_config.json";
+
+
 
     public static void main(String[] args) throws IOException, ClassNotFoundException {
         try {
@@ -45,13 +47,14 @@ public class Client {
 
             link.addClient(clientConfigs);
 
-            // Create a NodeService for sending messages to nodes
-            NodeService nodeService = new NodeService(link, clientConfig, leaderConfig, nodeConfigs);
-
+            // Create a clientService for sending messages to nodes
+            ClientService clientService = new ClientService(link, clientConfig, leaderConfig, nodeConfigs);
+            // Create a ClientMessageBuilder for creating the messages
+            ClientMessageBuilder clientMessageBuilder = new ClientMessageBuilder(clientConfig);
             // Start a thread to listen for messages from nodes
             new Thread(() -> {
                 // Listen for incoming messages from nodes
-                nodeService.listen();
+                clientService.listen();
 
             }).start();
 
@@ -59,15 +62,13 @@ public class Client {
             while (true) {
                 System.out.print("Enter command: ");
                 String userCommand = scanner.nextLine().trim().toLowerCase();
-
                 switch (userCommand.split(" ")[0]) {
                     case "append":
                         // Extract the payload from the user input
                         String payload = userCommand.substring("append".length()).trim();
+                        ClientMessage appendMessage = clientMessageBuilder.buildMessage(payload, clientConfig.getId());
                         // Send the message to nodes
-                        ClientMessage appendMessage = new ClientMessage(clientConfig.getId(), Message.Type.APPEND);
-                        appendMessage.setValue(payload);
-                        nodeService.sendClientMessage(appendMessage);
+                        clientService.sendClientMessage(appendMessage);
                         break;
                     case "quit":
                         // Handle other commands as needed
@@ -81,6 +82,7 @@ public class Client {
         } catch (Exception e) {
             e.printStackTrace();
         }
+
     }
 
     private static void quitHandler() {
