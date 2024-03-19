@@ -1,5 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
+import java.util.HashSet;
+
 import com.google.gson.Gson;
 
 public class RoundChangeMessage extends Message {
@@ -13,7 +15,7 @@ public class RoundChangeMessage extends Message {
 
     private String prepared_value;
 
-    private ConsensusMessage prepareMessage;
+    private HashSet<ConsensusMessage> prepareMessages;
     
     public RoundChangeMessage(String senderId, Type type, int consensusInstance, int round, int prepared_round, String prepared_value) {
         super(senderId, type);
@@ -21,15 +23,15 @@ public class RoundChangeMessage extends Message {
         this.round = round;
         this.prepared_round = prepared_round;
         this.prepared_value = prepared_value;
-        this.prepareMessage = null;
+        this.prepareMessages = new HashSet<>();
     }
 
-    public void setPrepareMessage(ConsensusMessage prepareMessage) {
-        this.prepareMessage = prepareMessage;
+    public void addPrepareMessage(ConsensusMessage message) {
+        prepareMessages.add(message);
     }
 
-    public ConsensusMessage getPrepareMessage() {
-        return this.prepareMessage;
+    public HashSet<ConsensusMessage> getPrepareMessages() {
+        return this.prepareMessages;
     }
 
     public int getConsensusInstance() {
