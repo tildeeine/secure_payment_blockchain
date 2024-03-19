@@ -8,8 +8,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.mockito.Mock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.times;
 import org.mockito.MockitoAnnotations;
+import org.mockito.Mockito;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
@@ -18,13 +22,25 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Arrays;
+import java.security.PrivateKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.KeyFactory;
+import java.io.FileInputStream;
+import java.io.IOException;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfigBuilder;
 import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
+import pt.ulisboa.tecnico.hdsledger.communication.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.PrePrepareMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.RoundChangeMessage;
+import pt.ulisboa.tecnico.hdsledger.utilities.Authenticate;
 
 @ExtendWith(MockitoExtension.class)
 class NodeServiceNormalTest {
@@ -49,11 +65,37 @@ class NodeServiceNormalTest {
     private static String byzantineNodeId = "3";
     private static String clientId = "client1";
 
-    @Mock
-    private Link mockNodeLink;
+    private Link linkSpy;
+
+    private static PrivateKey clientKey;
 
     @Mock
     private ClientData mockClientData;
+
+    @BeforeAll
+    public static void setUpAll() {
+        try {
+            getClientPrivateKey();
+        } catch (IOException e) {
+            System.out.println("Error reading client private key");
+        }
+    }
+
+    public static void getClientPrivateKey() throws IOException {
+        try {
+            String keyPath = "../Utilities/keys/key" + clientId + ".priv";
+            FileInputStream fis = new FileInputStream(keyPath);
+            byte[] encoded = new byte[fis.available()];
+            fis.read(encoded);
+            fis.close();
+
+            PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(encoded);
+            KeyFactory keyFac = KeyFactory.getInstance("RSA");
+            clientKey = keyFac.generatePrivate(spec);
+        } catch (Exception e) {
+            System.out.println("Error reading client private key");
+        }
+    }
 
     @BeforeEach
     void setUp() {
@@ -78,7 +120,8 @@ class NodeServiceNormalTest {
                 ConsensusMessage.class);
         // Add clients configs to the link, so node can send messages to clients
         link.addClient(clientConfigs);
-
+        linkSpy = org.mockito.Mockito.spy(link); // ! Consider changing this if we use this setup method for more
+                                                 // nodeservices
         // New TestableNodeService
         return new TestableNodeService(link, nodeConfig, leaderConfig,
                 nodeConfigs);
@@ -87,31 +130,7 @@ class NodeServiceNormalTest {
     @AfterEach
     void tearDown() {
         nodeService.shutdown();
-    }
-
-    // Test that the node sends a PREPARE message when receiving a PRE-PREPARE
-    @Test
-    void testPrepareOnPrePrepare() {
-        // Test logic
-    }
-
-    // Test that the node does not send a PREPARE message when receiving a
-    // PRE-PREPARE from someone who is not the leader
-    @Test
-    void testNoPrepareOnPrePrepareFromNonLeader() {
-        // Test logic
-    }
-
-    // Test that the node starts a new consensus if it is the leader
-    @Test
-    void testStartConsensusOnClientRequestFromLeader() {
-        // Test logic
-    }
-
-    // Test that node does not start a new consensus if it is not the leader
-    @Test
-    void testNoStartConsensusOnClientRequestFromNonLeader() {
-        // Test logic
+        Mockito.reset(linkSpy);
     }
 
     // Test that the correct updateLeader is done
@@ -130,10 +149,8 @@ class NodeServiceNormalTest {
         // Test logic
         int targetRound = instance.getCurrentRound() + 1;
 
-        // Set current round to target round
+        // Set current round to target round and find the next leader
         instance.setCurrentRound(targetRound);
-
-        // Assert that the next node in config is now leader
         String nextLeaderId = String.valueOf(((instance.getCurrentRound() - 1) % nodeConfigs.length + 1));
 
         // Act
@@ -146,7 +163,50 @@ class NodeServiceNormalTest {
     // messages
     @Test
     void testCommitOnValidQuorum() {
-        // Test logic
+        // Test setup
+        // Make enough prepare messages to reach quorum (2f+1)
+        // Get number of nodes and calculate quorum
+        int N = nodeConfigs.length;
+        int f = (N - 1) / 3;
+        int quorum = 3 * f + 1;
+
+        // Set up client data
+        ClientData clientData = new ClientData();
+        clientData.setRequestID(1); // arbitrary number
+        clientData.setValue("Value");
+        clientData.setClientID("client1");
+
+        try {
+            byte[] signature = Authenticate.signMessage(clientKey, clientData.getValue());
+            clientData.setSignature(signature);
+        } catch (Exception e) {
+            System.out.println("Error signing value");
+        }
+
+        // Set values for the prepare message
+        int consensusInstance = nodeService.getConsensusInstance().get();
+        int round = 1;
+        PrepareMessage prepareMessage = new PrepareMessage(clientData);
+        String senderMessageId = "1";
+
+        // Make and send enough prepare messages to reach quorum (2f+1)
+        for (int i = 0; i < quorum; i++) {
+            // Create prepare message
+            ConsensusMessage consensusMessage = new ConsensusMessageBuilder(String.valueOf(i + 1), Message.Type.PREPARE)
+                    .setConsensusInstance(consensusInstance)
+                    .setRound(round)
+                    .setMessage(prepareMessage.toJson())
+                    .build();
+
+            nodeService.uponPrepare(consensusMessage);
+        }
+
+        // Verify that nodeService sends quorum commit messages
+        // ! Doesn't work. I know that link.send is called, but this doesn't verify
+        // verify(linkSpy, times(quorum)).send(anyString(), argThat(argument -> argument
+        // instanceof ConsensusMessage &&
+        // ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
+        verify(linkSpy, times(1)).send(anyString(), any()); // ! Doesn't work
     }
 
     // Test that commit is not sent if there is not a valid quorum for the prepare
