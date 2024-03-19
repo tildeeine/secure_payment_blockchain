@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.*;
+import org.mockito.Spy;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -65,7 +66,7 @@ class NodeServiceNormalTest {
     private static String byzantineNodeId = "3";
     private static String clientId = "client1";
 
-    private Link linkSpy;
+    private static Link linkSpy;
 
     private static PrivateKey clientKey;
 
@@ -116,14 +117,12 @@ class NodeServiceNormalTest {
                 .findAny()
                 .get();
 
-        Link link = new Link(nodeConfig, nodeConfig.getPort(), nodeConfigs,
-                ConsensusMessage.class);
+        linkSpy = Mockito.spy(new Link(nodeConfig, nodeConfig.getPort(), nodeConfigs, ConsensusMessage.class));
+
         // Add clients configs to the link, so node can send messages to clients
-        link.addClient(clientConfigs);
-        linkSpy = org.mockito.Mockito.spy(link); // ! Consider changing this if we use this setup method for more
-                                                 // nodeservices
-        // New TestableNodeService
-        return new TestableNodeService(link, nodeConfig, leaderConfig,
+        linkSpy.addClient(clientConfigs);
+
+        return new TestableNodeService(linkSpy, nodeConfig, leaderConfig,
                 nodeConfigs);
     }
 
@@ -131,6 +130,7 @@ class NodeServiceNormalTest {
     void tearDown() {
         nodeService.shutdown();
         Mockito.reset(linkSpy);
+
     }
 
     // Test that the correct updateLeader is done
@@ -170,7 +170,8 @@ class NodeServiceNormalTest {
         int f = (N - 1) / 3;
         int quorum = 3 * f + 1;
 
-        // Set up client data
+        // Set up client data //! Consider moving this to the testableNodeService class
+        // as getter, for cleaner test code
         ClientData clientData = new ClientData();
         clientData.setRequestID(1); // arbitrary number
         clientData.setValue("Value");
@@ -199,14 +200,15 @@ class NodeServiceNormalTest {
                     .build();
 
             nodeService.uponPrepare(consensusMessage);
+
         }
 
         // Verify that nodeService sends quorum commit messages
-        // ! Doesn't work. I know that link.send is called, but this doesn't verify
-        // verify(linkSpy, times(quorum)).send(anyString(), argThat(argument -> argument
-        // instanceof ConsensusMessage &&
-        // ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
-        verify(linkSpy, times(1)).send(anyString(), any()); // ! Doesn't work
+        verify(linkSpy, times(quorum)).send(anyString(), argThat(argument -> argument instanceof ConsensusMessage &&
+                ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
+
+        // verify(linkSpy, times(1)).send(anyString(), any()); // ! Doesn't work, no
+        // interaction with linkSpy
     }
 
     // Test that commit is not sent if there is not a valid quorum for the prepare
