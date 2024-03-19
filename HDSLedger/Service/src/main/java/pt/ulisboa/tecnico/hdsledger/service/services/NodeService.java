@@ -76,7 +76,7 @@ public class NodeService implements UDPService {
     // Client requests
     private Queue<ClientData> clientRequestQueue;
 
-    private Map<Integer, ClientData> consensusToDataMapping = new ConcurrentHashMap<>(); 
+    private Map<Integer, ClientData> consensusToDataMapping = new ConcurrentHashMap<>();
 
     // private String clientRequestID;
 
@@ -100,7 +100,7 @@ public class NodeService implements UDPService {
         this.roundChangeMessages = new ArrayList<RoundChangeMessage>();
 
         this.timeout = 5000;
-        
+
         this.clientRequestQueue = new LinkedList<>();
     }
 
@@ -216,7 +216,8 @@ public class NodeService implements UDPService {
 
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
-            // this.link.broadcast(this.createConsensusMessage(value, localConsensusInstance, instance.getCurrentRound()));
+            // this.link.broadcast(this.createConsensusMessage(value,
+            // localConsensusInstance, instance.getCurrentRound()));
 
             startTimer();
         }
@@ -305,7 +306,8 @@ public class NodeService implements UDPService {
             InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
-            this.link.broadcast(this.createConsensusMessage(clientData, localConsensusInstance, instance.getCurrentRound()));
+            this.link.broadcast(
+                    this.createConsensusMessage(clientData, localConsensusInstance, instance.getCurrentRound()));
         } else {
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Node is not leader, waiting for PRE-PREPARE message", config.getId()));
@@ -411,7 +413,7 @@ public class NodeService implements UDPService {
                     .setRound(round)
                     .setReplyTo(senderId)
                     .setReplyToMessageId(message.getMessageId())
-                    .setMessage(instance.getCommitMessage().toJson())
+                    .setMessage(instance.getCommitMessage().toJson()) // ! generates error
                     .build();
 
             link.send(senderId, m);
@@ -422,15 +424,15 @@ public class NodeService implements UDPService {
         Optional<String> preparedValue = prepareMessages.hasValidPrepareQuorum(config.getId(), consensusInstance,
                 round);
         if (preparedValue.isPresent() && instance.getPreparedRound() < round) {
+            if (!this.verifyClientData(clientData)) {
+                return;
+            }
             instance.setPreparedValue(preparedValue.get());
             instance.setPreparedRound(round);
 
             // Must reply to prepare message senders
             Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(consensusInstance, round)
                     .values();
-            if (!this.verifyClientData(clientData)){
-                return;
-            }
             CommitMessage c = new CommitMessage(preparedValue.get());
             instance.setCommitMessage(c);
 
@@ -497,17 +499,16 @@ public class NodeService implements UDPService {
 
             String value = commitValue.get();
 
-            
             ClientData clientData = this.consensusToDataMapping.get(consensusInstance);
-            
 
             // Check if this client request is up next
             while (!clientRequestQueue.isEmpty()) {
                 // Peek at the next client request without removing it from the queue
                 ClientData nextClientRequest = clientRequestQueue.peek();
-                
+
                 // Check if the next client request matches the current client request
-                if (nextClientRequest.getClientID().equals(clientData.getClientID()) && nextClientRequest.getRequestID() == clientData.getRequestID()) {
+                if (nextClientRequest.getClientID().equals(clientData.getClientID())
+                        && nextClientRequest.getRequestID() == clientData.getRequestID()) {
                     // This client request is up next, break out of the loop
                     clientRequestQueue.poll();
                     break;
@@ -520,8 +521,6 @@ public class NodeService implements UDPService {
                     e.printStackTrace();
                 }
             }
-
-
 
             // Append value to the ledger (must be synchronized to be thread-safe)
             synchronized (ledger) {
@@ -553,11 +552,18 @@ public class NodeService implements UDPService {
         }
     }
 
-    public boolean verifyClientData(ClientData clientData){
-        byte [] signature = clientData.getSignature();
+    public boolean verifyClientData(ClientData clientData) {
+        byte[] signature = clientData.getSignature();
         String value = clientData.getValue();
+
+        // Check if the signature is null and immediately return false if so
+        if (signature == null) {
+            System.out.println("Message has no signature and will be ignored.");
+            return false;
+        }
+
         try {
-            if (Authenticate.verifyMessage(config.getNodePubKey(clientData.getClientID()), value, signature)){
+            if (Authenticate.verifyMessage(config.getNodePubKey(clientData.getClientID()), value, signature)) {
                 return true;
             }
         } catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
@@ -571,7 +577,7 @@ public class NodeService implements UDPService {
     public void handleClientRequest(ClientMessage message) {
 
         ClientData clientData = message.getClientData();
-        if (!this.verifyClientData(clientData)){
+        if (!this.verifyClientData(clientData)) {
             return;
         }
         clientRequestQueue.offer(clientData);

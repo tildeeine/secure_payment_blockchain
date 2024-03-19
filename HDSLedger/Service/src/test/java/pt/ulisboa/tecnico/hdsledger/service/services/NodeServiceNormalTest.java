@@ -82,6 +82,20 @@ class NodeServiceNormalTest {
         }
     }
 
+    @BeforeEach
+    void setUp() {
+        // Instantiate TestableNodeService
+        nodeService = nodeSetup(testNodeId);
+        MockitoAnnotations.initMocks(this);
+    }
+
+    @AfterEach
+    void tearDown() {
+        nodeService.shutdown();
+        Mockito.reset(linkSpy);
+
+    }
+
     public static void getClientPrivateKey() throws IOException {
         try {
             String keyPath = "../Utilities/keys/key" + clientId + ".priv";
@@ -96,13 +110,6 @@ class NodeServiceNormalTest {
         } catch (Exception e) {
             System.out.println("Error reading client private key");
         }
-    }
-
-    @BeforeEach
-    void setUp() {
-        // Instantiate TestableNodeService
-        nodeService = nodeSetup(testNodeId);
-        MockitoAnnotations.initMocks(this);
     }
 
     public TestableNodeService nodeSetup(String id) {
@@ -126,11 +133,20 @@ class NodeServiceNormalTest {
                 nodeConfigs);
     }
 
-    @AfterEach
-    void tearDown() {
-        nodeService.shutdown();
-        Mockito.reset(linkSpy);
+    public ClientData setupClientData() {
+        // Set up client data
+        ClientData clientData = new ClientData();
+        clientData.setRequestID(1); // arbitrary number
+        clientData.setValue("Value");
+        clientData.setClientID("client1");
 
+        try {
+            byte[] signature = Authenticate.signMessage(clientKey, clientData.getValue());
+            clientData.setSignature(signature);
+        } catch (Exception e) {
+            System.out.println("Error signing value");
+        }
+        return clientData;
     }
 
     // Test that the correct updateLeader is done
@@ -159,23 +175,7 @@ class NodeServiceNormalTest {
         assertEquals(true, nodeService.isLeader(nextLeaderId));
     }
 
-    public ClientData setupClientData() {
-        // Set up client data
-        ClientData clientData = new ClientData();
-        clientData.setRequestID(1); // arbitrary number
-        clientData.setValue("Value");
-        clientData.setClientID("client1");
-
-        try {
-            byte[] signature = Authenticate.signMessage(clientKey, clientData.getValue());
-            clientData.setSignature(signature);
-        } catch (Exception e) {
-            System.out.println("Error signing value");
-        }
-        return clientData;
-    }
-
-    // Test that commit is only sent if there is a valid quorum for the prepare
+    // Test that commit is sent if there is a valid quorum for the prepare
     // messages
     @Test
     void testCommitOnValidQuorum() {
@@ -186,8 +186,7 @@ class NodeServiceNormalTest {
         int f = (N - 1) / 3;
         int quorum = 3 * f + 1;
 
-        // Set up client data //! Consider moving this to the testableNodeService class
-        // as getter, for cleaner test code
+        // Set up client data
         ClientData clientData = setupClientData();
 
         // Set values for the prepare message
@@ -248,7 +247,7 @@ class NodeServiceNormalTest {
                 ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
     }
 
-    // Test that client data that is not signed is not accepted
+    // Test that client data that is not signed is not accepted for quorum
     @Test
     void testRejectUnsignedClientData() {
         // Set up client data
@@ -280,10 +279,45 @@ class NodeServiceNormalTest {
                 ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
     }
 
-    // Test that client data that is signed is accepted
+    // Test that commit messages that have quorum add value to ledger
     @Test
-    void testAcceptSignedClientData() {
-        // Test logic
+    void testCommitAddsValueToLedger() {
+        // Test
+    }
+
+    // Test that commit messages that do not have quorum do not add value to ledger
+    @Test
+    void testNoCommitNoValueToLedger() {
+        // Test
+    }
+
+    // Test a byzantine leader sending malformed proposals. Honest nodes should not
+    // respond to this proposal, and should not crash.
+    @Test
+    void testByzantineLeaderInvalidProposals() {
+        // Test
+    }
+
+    // Byzntine leader sending conflicting proposals to different subset of nodes,
+    // trying to cause a split vote. Honest nodes should detect this and recover.//?
+    // Round change?
+    @Test
+    void testByzantineLeaderConflictingProposals() {
+        // Test
+    }
+
+    // Byzantine leader sending prepare messages it generated itself to try and
+    // advance consensus without valid proposal. Honest nodes should not proceed to
+    // commit phase.
+    @Test
+    void testByzantineLeaderFalsePrepare() {
+        // Test
+    }
+
+    // Check that initiates round change if consensus is not reached within a round
+    @Test
+    void testRoundChangeIfNoConsensus() {
+        // Test
     }
 
 }

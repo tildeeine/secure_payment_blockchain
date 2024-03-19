@@ -84,4 +84,18 @@ class NodeServiceCrashTest {
         nodeService.shutdown();
     }
 
+    // Test leader crash. Service should detect leader crash and start a new
+    // election
+    @Test
+    void testLeaderCrash() {
+        // Test leader crash
+
+    }
+
+    // Test crash of f nodes //? does this show anything?
+    @Test
+    void testNodeCrash() {
+        // Test node crash
+    }
+
 }
