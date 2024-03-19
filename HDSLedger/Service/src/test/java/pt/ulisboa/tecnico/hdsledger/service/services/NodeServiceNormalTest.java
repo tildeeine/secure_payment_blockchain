@@ -159,6 +159,22 @@ class NodeServiceNormalTest {
         assertEquals(true, nodeService.isLeader(nextLeaderId));
     }
 
+    public ClientData setupClientData() {
+        // Set up client data
+        ClientData clientData = new ClientData();
+        clientData.setRequestID(1); // arbitrary number
+        clientData.setValue("Value");
+        clientData.setClientID("client1");
+
+        try {
+            byte[] signature = Authenticate.signMessage(clientKey, clientData.getValue());
+            clientData.setSignature(signature);
+        } catch (Exception e) {
+            System.out.println("Error signing value");
+        }
+        return clientData;
+    }
+
     // Test that commit is only sent if there is a valid quorum for the prepare
     // messages
     @Test
@@ -172,17 +188,7 @@ class NodeServiceNormalTest {
 
         // Set up client data //! Consider moving this to the testableNodeService class
         // as getter, for cleaner test code
-        ClientData clientData = new ClientData();
-        clientData.setRequestID(1); // arbitrary number
-        clientData.setValue("Value");
-        clientData.setClientID("client1");
-
-        try {
-            byte[] signature = Authenticate.signMessage(clientKey, clientData.getValue());
-            clientData.setSignature(signature);
-        } catch (Exception e) {
-            System.out.println("Error signing value");
-        }
+        ClientData clientData = setupClientData();
 
         // Set values for the prepare message
         int consensusInstance = nodeService.getConsensusInstance().get();
@@ -206,16 +212,40 @@ class NodeServiceNormalTest {
         // Verify that nodeService sends quorum commit messages
         verify(linkSpy, times(quorum)).send(anyString(), argThat(argument -> argument instanceof ConsensusMessage &&
                 ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
-
-        // verify(linkSpy, times(1)).send(anyString(), any()); // ! Doesn't work, no
-        // interaction with linkSpy
     }
 
     // Test that commit is not sent if there is not a valid quorum for the prepare
     // messages
     @Test
     void testNoCommitOnInvalidQuorum() {
-        // Test logic
+        // Assuming f byzantine nodes colluding to send prepare messages with same value
+        int f = (nodeConfigs.length - 1) / 3;
+
+        // Set up client data
+        ClientData clientData = setupClientData();
+        clientData.setValue("ByzantineValue");
+
+        // Set values for the prepare message
+        int consensusInstance = nodeService.getConsensusInstance().get();
+        int round = 1;
+        PrepareMessage prepareMessage = new PrepareMessage(clientData);
+        String senderMessageId = "1";
+
+        // Make and send f prepare messages
+        for (int i = 0; i < f; i++) {
+            // Create prepare message
+            ConsensusMessage consensusMessage = new ConsensusMessageBuilder(String.valueOf(i + 1), Message.Type.PREPARE)
+                    .setConsensusInstance(consensusInstance)
+                    .setRound(round)
+                    .setMessage(prepareMessage.toJson())
+                    .build();
+
+            nodeService.uponPrepare(consensusMessage);
+        }
+
+        // Verify that nodeService does not send commit messages
+        verify(linkSpy, times(0)).send(anyString(), argThat(argument -> argument instanceof ConsensusMessage &&
+                ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
     }
 
     // Test that client data that is not signed is not accepted
