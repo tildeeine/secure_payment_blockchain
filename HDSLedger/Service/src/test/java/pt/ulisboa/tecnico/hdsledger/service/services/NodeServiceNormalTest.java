@@ -251,7 +251,33 @@ class NodeServiceNormalTest {
     // Test that client data that is not signed is not accepted
     @Test
     void testRejectUnsignedClientData() {
-        // Test logic
+        // Set up client data
+        ClientData clientData = new ClientData();
+        clientData.setRequestID(1); // arbitrary number
+        clientData.setValue("Value");
+        clientData.setClientID("client1");
+        // Not adding signature
+
+        // Send quorum of prepare messages with unsigned client data
+        int consensusInstance = nodeService.getConsensusInstance().get();
+        int round = 1;
+        PrepareMessage prepareMessage = new PrepareMessage(clientData);
+        int quorum = 3 * ((nodeConfigs.length - 1) / 3) + 1;
+
+        for (int i = 0; i < quorum; i++) {
+            // Create prepare message
+            ConsensusMessage consensusMessage = new ConsensusMessageBuilder(String.valueOf(i + 1), Message.Type.PREPARE)
+                    .setConsensusInstance(consensusInstance)
+                    .setRound(round)
+                    .setMessage(prepareMessage.toJson())
+                    .build();
+
+            nodeService.uponPrepare(consensusMessage);
+        }
+
+        // Verify that nodeService does not send commit messages
+        verify(linkSpy, times(0)).send(anyString(), argThat(argument -> argument instanceof ConsensusMessage &&
+                ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
     }
 
     // Test that client data that is signed is accepted
