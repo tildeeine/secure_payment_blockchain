@@ -194,7 +194,7 @@ public class NodeService implements UDPService {
         int localConsensusInstance = this.consensusInstance.get();
         InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
 
-        RoundChangeMessage message = new RoundChangeMessage(config.getId(), Message.Type.ROUND_CHANGE, localConsensusInstance, round,instance.getPreparedRound(), instance.getPreparedValue());
+        RoundChangeMessage message = new RoundChangeMessage(config.getId(), Message.Type.ROUND_CHANGE, localConsensusInstance, round,instance.getPreparedRound(), instance.getPreparedData());
         
         Collection <ConsensusMessage> prepareMessages = this.prepareMessages.getMessages(localConsensusInstance, round).values();
 
@@ -205,7 +205,7 @@ public class NodeService implements UDPService {
             HashSet<ConsensusMessage> messagesToSend =
                 prepareMessages.stream().
                 filter(entry->entry.getRound() == highestPrepared.getPreparedRound()).
-                filter(entry->entry.deserializePrepareMessage().getClientData().getValue() == highestPrepared.getPreparedValue())
+                filter(entry->entry.deserializePrepareMessage().getClientData().getValue() == highestPrepared.getClientData().getValue())
                 .collect(Collectors.toCollection(HashSet::new));
 
             for (ConsensusMessage m : messagesToSend) {
@@ -250,16 +250,16 @@ public class NodeService implements UDPService {
         if (numMessages >=  quorum && this.config.isLeader() && !this.rule1 || this.justifyRoundChange(this.roundChangeMessages)) {
             this.rule1 = true;
 
-            String value;
+            ClientData value;
             
             RoundChangeMessage highestPrepared = this.highestPrepared(roundChangeMessages, instance.getCurrentRound());
             
             if (highestPrepared.getPreparedRound() == -1) {
 
-                value = this.consensusToDataMapping.get(localConsensusInstance).getValue();
+                value = this.consensusToDataMapping.get(localConsensusInstance);
 
             } else {
-                value = highestPrepared.getPreparedValue();
+                value = highestPrepared.getClientData();
             }
 
             // Leader broadcasts PRE-PREPARE message
@@ -267,8 +267,7 @@ public class NodeService implements UDPService {
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
 
-
-            //this.link.broadcast(this.createConsensusMessage(value, localConsensusInstance, instance.getCurrentRound()));
+            this.link.broadcast(this.createConsensusMessage(value, localConsensusInstance, instance.getCurrentRound()));
 
             startTimer();
         }
@@ -305,11 +304,11 @@ public class NodeService implements UDPService {
             return true;
         }
 
-        return checkRoundChangeMessages(message.deserializePrePrepareMessage().getClientData().getValue());
+        return checkRoundChangeMessages(message.deserializePrePrepareMessage().getClientData());
     }
 
     // Auxiliar to the justifies, checks round change messages with correct value
-    public boolean checkRoundChangeMessages(String value) {
+    public boolean checkRoundChangeMessages(ClientData value) {
         int localConsensusInstance = this.consensusInstance.get();
         InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
         
@@ -326,11 +325,11 @@ public class NodeService implements UDPService {
         
         // possible attack - byzantine process sends very big prepared round
         
-        String v;
+        ClientData v;
 
         // For justify round change
         if (value == null) {
-            v = hp.getPreparedValue();
+            v = hp.getClientData();
         }
 
         // For justify pre-prepare
@@ -348,7 +347,7 @@ public class NodeService implements UDPService {
             int n = (int) m.getPrepareMessages().stream().
                 filter(entry->entry.getConsensusInstance()==localConsensusInstance).
                 filter(entry->entry.getRound() == hp.getPreparedRound()).
-                filter(entry->entry.deserializePrepareMessage().getClientData().getValue().equals(v)).
+                filter(entry->entry.deserializePrepareMessage().getClientData().getValue().equals(v.getValue())).
                 count();
 
             if (n >= this.quorum) {
@@ -563,10 +562,11 @@ public class NodeService implements UDPService {
         }
 
         // Find value with valid quorum
-        Optional<String> preparedValue = prepareMessages.hasValidPrepareQuorum(config.getId(), consensusInstance,
+        Optional<ClientData> preparedData = prepareMessages.hasValidPrepareQuorum(config.getId(), consensusInstance,
                 round);
-        if (preparedValue.isPresent() && instance.getPreparedRound() < round) {
-            instance.setPreparedValue(preparedValue.get());
+
+        if (preparedData.isPresent() && instance.getPreparedRound() < round) {
+            instance.setPreparedData(preparedData.get());
             instance.setPreparedRound(round);
 
             // Must reply to prepare message senders
@@ -575,7 +575,7 @@ public class NodeService implements UDPService {
             if (!this.verifyClientData(clientData)){
                 return;
             }
-            CommitMessage c = new CommitMessage(preparedValue.get());
+            CommitMessage c = new CommitMessage(preparedData.get());
             instance.setCommitMessage(c);
 
             sendersMessage.forEach(senderMessage -> {
@@ -629,7 +629,7 @@ public class NodeService implements UDPService {
             return;
         }
 
-        Optional<String> commitValue = commitMessages.hasValidCommitQuorum(config.getId(),
+        Optional<ClientData> commitValue = commitMessages.hasValidCommitQuorum(config.getId(),
                 consensusInstance, round);
 
         if (commitValue.isPresent() && instance.getCommittedRound() < round) {
@@ -639,7 +639,7 @@ public class NodeService implements UDPService {
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
 
-            String value = commitValue.get();
+            ClientData commitedData = commitValue.get();
 
             
             ClientData clientData = this.consensusToDataMapping.get(consensusInstance);
@@ -669,6 +669,8 @@ public class NodeService implements UDPService {
 
             // Append value to the ledger (must be synchronized to be thread-safe)
             synchronized (ledger) {
+
+                String value = commitedData.getValue();
 
                 // Increment size of ledger to accommodate current instance
                 ledger.ensureCapacity(consensusInstance);
