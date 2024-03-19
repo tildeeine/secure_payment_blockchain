@@ -110,8 +110,8 @@ public class NodeService implements UDPService {
         this.quorum = Math.floorDiv(nodesConfig.length + f, 2) + 1;
 
         this.clientRequestQueue = new LinkedList<>();
-
     }
+
 
     public void sendTestMessage(String nodeId, Message message) {
         link.send(nodeId, message);
@@ -231,7 +231,6 @@ public class NodeService implements UDPService {
     }
 
     public void uponRoundChange(RoundChangeMessage message) {
-        roundChangeMessages.add(message);
         int localConsensusInstance = this.consensusInstance.get();
         InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
 
@@ -240,14 +239,18 @@ public class NodeService implements UDPService {
                         "{0} - Received ROUND_CHANGE message from {1} Consensus Instance {2}, Round {3}",
                         config.getId(), message.getSenderId(), message.getConsensusInstance(), message.getRound()));
 
+        if (!verifyClientData(message.getClientData())) {
+            System.out.println("Message is not valid");
+            return;
+        }
+
+        roundChangeMessages.add(message);
+
         // Received quorum of ROUND_CHANGE. Line 11-16
         int numMessages = (int) roundChangeMessages.stream().
         filter(entry -> entry.getConsensusInstance() == localConsensusInstance).filter(entry -> entry.getRound() == instance.getCurrentRound()).count();
 
-        int f = Math.floorDiv(nodesConfig.length - 1, 3);
-        int quorum = Math.floorDiv(nodesConfig.length + f, 2) + 1;
-
-        if (numMessages >=  quorum && this.config.isLeader() && !this.rule1 || this.justifyRoundChange(this.roundChangeMessages)) {
+        if (numMessages >=  this.quorum && this.config.isLeader() && !this.rule1 && this.justifyRoundChange(this.roundChangeMessages)) {
             this.rule1 = true;
 
             ClientData value;
@@ -279,8 +282,6 @@ public class NodeService implements UDPService {
             System.out.println("Rule 2");
             this.rule2 = true;
 
-            updateLeader();
-
             int newRound = roundChangeMessages.stream()
                     .filter(entry -> entry.getConsensusInstance() == localConsensusInstance)
                     .filter(entry -> entry.getRound() > instance.getCurrentRound())
@@ -288,9 +289,11 @@ public class NodeService implements UDPService {
 
             instance.setCurrentRound(newRound);
 
-            sendRoundChangeMessage(newRound);
+            updateLeader();
 
             startTimer();
+
+            sendRoundChangeMessage(newRound);
         }
     }
 
@@ -347,7 +350,7 @@ public class NodeService implements UDPService {
             int n = (int) m.getPrepareMessages().stream().
                 filter(entry->entry.getConsensusInstance()==localConsensusInstance).
                 filter(entry->entry.getRound() == hp.getPreparedRound()).
-                filter(entry->entry.deserializePrepareMessage().getClientData().getValue().equals(v.getValue())).
+                filter(entry->(entry.deserializePrepareMessage().getClientData().getValue().equals(v.getValue()) && verifyClientData(entry.deserializePrepareMessage().getClientData()))).
                 count();
 
             if (n >= this.quorum) {
@@ -459,7 +462,7 @@ public class NodeService implements UDPService {
         int round = message.getRound();
         String senderId = message.getSenderId();
         int senderMessageId = message.getMessageId();
-
+ 
         PrePrepareMessage prePrepareMessage = message.deserializePrePrepareMessage();
         this.consensusToDataMapping.put(consensusInstance, prePrepareMessage.getClientData());
 
@@ -469,6 +472,11 @@ public class NodeService implements UDPService {
                 MessageFormat.format(
                         "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}",
                         config.getId(), senderId, consensusInstance, round));
+
+        if (!verifyClientData(clientData)) {
+            System.out.println("Message is not valid");
+            return;
+        }
 
         // Verify if pre-prepare was sent by leader
         if (!isLeader(senderId)) {
@@ -480,7 +488,6 @@ public class NodeService implements UDPService {
         if (!justifyPrePrepare(message)) {
             System.out.println("PrePrepare message not justified");
             return;
-
         }
             
 
@@ -531,6 +538,11 @@ public class NodeService implements UDPService {
                         "{0} - Received PREPARE message from {1}: Consensus Instance {2}, Round {3}",
                         config.getId(), senderId, consensusInstance, round));
 
+        if (!verifyClientData(clientData)) {
+            System.out.println("Message is not valid");
+            return;
+        }
+
         // Doesn't add duplicate messages
         prepareMessages.addMessage(message);
 
@@ -572,9 +584,7 @@ public class NodeService implements UDPService {
             // Must reply to prepare message senders
             Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(consensusInstance, round)
                     .values();
-            if (!this.verifyClientData(clientData)){
-                return;
-            }
+
             CommitMessage c = new CommitMessage(preparedData.get());
             instance.setCommitMessage(c);
 
@@ -605,6 +615,11 @@ public class NodeService implements UDPService {
         LOGGER.log(Level.INFO,
                 MessageFormat.format("{0} - Received COMMIT message from {1}: Consensus Instance {2}, Round {3}",
                         config.getId(), message.getSenderId(), consensusInstance, round));
+
+        if (!verifyClientData(message.deserializeCommitMessage().getData())) {
+            System.out.println("Message is not valid");
+            return;
+        }
 
         commitMessages.addMessage(message);
 
