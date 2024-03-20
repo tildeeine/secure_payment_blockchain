@@ -1,4 +1,4 @@
-package pt.ulisboa.tecnico.hdsledger.client.services;
+package pt.ulisboa.tecnico.hdsledger.client.models;
 
 import java.security.PrivateKey;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -13,29 +13,31 @@ public class ClientMessageBuilder {
 
     // Client request instance
     private final AtomicInteger clientRequest = new AtomicInteger(0);
-    // Client key private 
+    // Client key private
     private PrivateKey privateKey;
 
-    public ClientMessageBuilder(ProcessConfig processConfig){
+    public ClientMessageBuilder(ProcessConfig processConfig) {
         this.privateKey = processConfig.getPrivateKey();
     }
 
-    public ClientMessage buildMessage(String payload, String senderID){
-        
+    public ClientMessage buildMessage(String payload, String senderID) {
+
         ClientMessage clientMessage = new ClientMessage(senderID, Message.Type.APPEND);
-        
+
         ClientData clientData = new ClientData();
         clientData.setClientID(senderID);
         clientData.setRequestID(this.clientRequest.getAndIncrement());
-        
-        try{
+
+        try {
             byte[] signature = Authenticate.signMessage(this.privateKey, payload);
             clientData.setSignature(signature);
         } catch (Exception e) {
             System.out.println("Error signing value");
         }
 
-        clientData.setValue(payload);
+        clientData.setValue(payload.split(" ")[0]); // ! do we on getAmount every check that value set is the same that
+                                                    // is signed in
+        // the signature?
 
         clientMessage.setClientData(clientData);
 

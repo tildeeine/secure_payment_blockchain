@@ -52,21 +52,9 @@ public class Node {
                     nodeConfigs);
             if (nodeConfig.isLeader())
                 return;
-            
-            
+
             nodeService.listen();
 
-            // ClientMessage message = new ClientMessage(nodeConfig.getId(), Message.Type.APPEND);
-            // ((ClientMessage) message).setValue("456");
-            // if (nodeConfig.getId().equals("3")) {
-            //     // for (int i = 0; i < 4; i++) {
-            //     Thread.sleep(500);
-            //     // String node = String.valueOf(i);
-            //     // nodeService.sendTestMessage(node, message);
-            //     // }
-
-            // }
-            
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -89,9 +77,3 @@ public class Node {
         nodeService.sendTestMessage(recipientId, message);
     }
 }
-
-
-    
-    
-        
-    

@@ -1,7 +1,8 @@
 package pt.ulisboa.tecnico.hdsledger.client;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
-import pt.ulisboa.tecnico.hdsledger.client.services.ClientMessageBuilder;
+import pt.ulisboa.tecnico.hdsledger.client.models.ClientMessageBuilder;
+import pt.ulisboa.tecnico.hdsledger.client.models.Account;
 import pt.ulisboa.tecnico.hdsledger.client.services.ClientService;
 import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
@@ -22,11 +23,12 @@ public class Client {
     private static final String CLIENTCONFIGPATH = "src/main/resources/client_config.json";
     private static final String NODECONFIGPATH = "src/main/resources/regular_config.json";
 
-
+    private static Account account;
 
     public static void main(String[] args) throws IOException, ClassNotFoundException {
         try {
             String id = args[0];
+            float startBalance = Float.parseFloat(args[1]);
             Scanner scanner = new Scanner(System.in);
 
             // Set up the link to the nodes
@@ -47,8 +49,11 @@ public class Client {
 
             link.addClient(clientConfigs);
 
+            account = new Account(clientConfig.getId(), startBalance, clientConfig.getPrivateKey(),
+                    clientConfig.getPublicKey());
+
             // Create a clientService for sending messages to nodes
-            ClientService clientService = new ClientService(link, clientConfig, leaderConfig, nodeConfigs);
+            ClientService clientService = new ClientService(link, clientConfig, leaderConfig, nodeConfigs, account);
             // Create a ClientMessageBuilder for creating the messages
             ClientMessageBuilder clientMessageBuilder = new ClientMessageBuilder(clientConfig);
             // Start a thread to listen for messages from nodes
@@ -59,20 +64,63 @@ public class Client {
             }).start();
 
             // Continuous loop to read user commands
+            System.out.print("Commands: \n"
+                    + "transfer <amount> <PublicKey destination> - Transfer amount to client with key destinationKey\n"
+                    + "balance - Check your current balance\n"
+                    + "check <PublicKey userKey> - Check balance of client with key userKey\n"
+                    + "quit - Exit the client application\n");
             while (true) {
                 System.out.print("Enter command: ");
                 String userCommand = scanner.nextLine().trim().toLowerCase();
                 switch (userCommand.split(" ")[0]) {
-                    case "append":
+                    case "transfer":
                         // Extract the payload from the user input
-                        String payload = userCommand.substring("append".length()).trim();
-                        ClientMessage appendMessage = clientMessageBuilder.buildMessage(payload, clientConfig.getId());
+                        String transferInput = userCommand.substring("transfer".length()).trim(); // ? Should we expect
+                                                                                                  // our client to input
+                                                                                                  // the receiving
+                                                                                                  // clients public key?
+                        String[] parts = transferInput.split(" ");
+                        if (parts.length != 2) {
+                            System.out.println(
+                                    "Invalid transfer command. Correct use: transfer <Int amount> <PublicKey destination>");
+                            break;
+                        }
+                        float amount = Float.parseFloat(parts[0]); // Throw exception if not float
+                        if (amount <= 0) {
+                            System.out.println("Amount must be a positive integer.");
+                            break;
+                        }
+                        if (amount > account.getBalance()) {
+                            System.out.println("Insufficient funds for this operation.");
+                            break;
+                        }
+                        String destinationKey = parts[1]; // Consider adding a check for valid public key
+                        ClientMessage transferMessage = clientMessageBuilder.buildMessage(transferInput,
+                                clientConfig.getId());
                         // Send the message to nodes
-                        clientService.sendClientMessage(appendMessage);
+                        clientService.clientTransfer(transferMessage);
+                        break;
+                    case "balance":
+                        System.out.println("Your current balance:   " + account.getBalance());
+                        break;
+                    case "check":
+                        System.out.println("Checking balance...");
+                        String userKey = userCommand.substring("check".length()).trim(); // ? Should we expect our
+                                                                                         // client to input the
+                                                                                         // receiving clients public
+                                                                                         // key?
+                        // clientService.checkBalance(userKey); // ! implement, checking other clients
+                        // balance
                         break;
                     case "quit":
-                        // Handle other commands as needed
                         quitHandler();
+                        break;
+                    case "help":
+                        System.out.println("Commands: \n"
+                                + "transfer <amount> <PublicKey destination> - Transfer amount to client with key destinationKey\n"
+                                + "balance - Check your current balance\n"
+                                + "check <PublicKey userKey> - Check balance of client with key userKey\n"
+                                + "quit - Exit the client application\n");
                         break;
                     default:
                         System.out.println("Unknown command. Try again.");
@@ -86,7 +134,6 @@ public class Client {
     }
 
     private static void quitHandler() {
-        // Perform any cleanup or shutdown tasks before exiting
         System.out.println("Exiting the client application.");
         System.exit(0);
     }
