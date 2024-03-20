@@ -31,6 +31,7 @@ import java.io.IOException;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
@@ -217,12 +218,10 @@ class NodeServiceNormalTest {
     // messages
     @Test
     void testNoCommitOnInvalidQuorum() {
-        // Assuming f byzantine nodes colluding to send prepare messages with same value
         int f = (nodeConfigs.length - 1) / 3;
 
         // Set up client data
         ClientData clientData = setupClientData();
-        clientData.setValue("ByzantineValue");
 
         // Set values for the prepare message
         int consensusInstance = nodeService.getConsensusInstance().get();
@@ -247,7 +246,8 @@ class NodeServiceNormalTest {
                 ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
     }
 
-    // Test that client data that is not signed is not accepted for quorum
+    // Test that client data that is not signed is not accepted for quorum.
+    // Byzantine nodes can't collude to add unsigned data to the ledger.
     @Test
     void testRejectUnsignedClientData() {
         // Set up client data
@@ -300,7 +300,7 @@ class NodeServiceNormalTest {
         int consensusInstance = nodeService.getConsensusInstance().get();
         System.out.println("Consensus instance: " + consensusInstance); // !
         int round = 1;
-        PrepareMessage prepareMessage = new PrepareMessage(clientData);
+        CommitMessage commitMessage = new CommitMessage(clientData);
         int quorum = 3 * ((nodeConfigs.length - 1) / 3) + 1;
 
         for (int i = 0; i < quorum; i++) {
@@ -308,7 +308,7 @@ class NodeServiceNormalTest {
             ConsensusMessage consensusMessage = new ConsensusMessageBuilder(String.valueOf(i + 1), Message.Type.COMMIT)
                     .setConsensusInstance(consensusInstance)
                     .setRound(round)
-                    .setMessage(prepareMessage.toJson())
+                    .setMessage(commitMessage.toJson())
                     .build();
 
             nodeService.uponCommit(consensusMessage);
@@ -319,10 +319,20 @@ class NodeServiceNormalTest {
         assertEquals(clientData.getValue(), nodeService.getLedger().get(ledgerLengthBefore));
     }
 
-    // Test that commit messages that do not have quorum do not add value to ledger
+    // Test that commit messages that do not have quorum do not add value to ledger.
     @Test
     void testNoCommitNoValueToLedger() {
-        // Test
+        // Get ledger length before commit
+        int ledgerLengthBefore = nodeService.getLedger().size();
+
+        // Set up client data
+        ClientData clientData = setupClientData();
+
+        // Send f commit messages
+        int consensusInstance = nodeService.getConsensusInstance().get();
+        int round = 1;
+        PrepareMessage prepareMessage = new PrepareMessage(clientData);
+
     }
 
     // Test a byzantine leader sending malformed proposals. Honest nodes should not
