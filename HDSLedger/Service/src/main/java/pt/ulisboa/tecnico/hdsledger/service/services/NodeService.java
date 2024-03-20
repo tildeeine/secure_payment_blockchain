@@ -66,9 +66,9 @@ public class NodeService implements UDPService {
     // Consensus instance information per consensus instance
     private final Map<Integer, InstanceInfo> instanceInfo = new ConcurrentHashMap<>();
     // Current consensus instance
-    private final AtomicInteger consensusInstance = new AtomicInteger(0);
+    private final AtomicInteger consensusInstance = new AtomicInteger(1); // ! Changed to initialize at 1
     // Last decided consensus instance
-    private final AtomicInteger lastDecidedConsensusInstance = new AtomicInteger(0);
+    private final AtomicInteger lastDecidedConsensusInstance = new AtomicInteger(1);
 
     // Ledger (for now, just a list of strings)
     private ArrayList<String> ledger = new ArrayList<String>();
@@ -413,7 +413,7 @@ public class NodeService implements UDPService {
                     .setRound(round)
                     .setReplyTo(senderId)
                     .setReplyToMessageId(message.getMessageId())
-                    .setMessage(instance.getCommitMessage().toJson()) // ! generates error
+                    .setMessage(instance.getCommitMessage().toJson())
                     .build();
 
             link.send(senderId, m);
@@ -433,7 +433,7 @@ public class NodeService implements UDPService {
             // Must reply to prepare message senders
             Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(consensusInstance, round)
                     .values();
-            CommitMessage c = new CommitMessage(preparedValue.get());
+            CommitMessage c = new CommitMessage(clientData);
             instance.setCommitMessage(c);
 
             sendersMessage.forEach(senderMessage -> {
@@ -456,9 +456,11 @@ public class NodeService implements UDPService {
      * @param message Message to be handled
      */
     public synchronized void uponCommit(ConsensusMessage message) {
-
         int consensusInstance = message.getConsensusInstance();
         int round = message.getRound();
+
+        CommitMessage commitMessage = message.deserializeCommitMessage();
+        ClientData clientData = commitMessage.getClientData();
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format("{0} - Received COMMIT message from {1}: Consensus Instance {2}, Round {3}",
@@ -469,6 +471,7 @@ public class NodeService implements UDPService {
         InstanceInfo instance = this.instanceInfo.get(consensusInstance);
 
         if (instance == null) {
+
             // Should never happen because only receives commit as a response to a prepare
             // message
             MessageFormat.format(
@@ -480,6 +483,7 @@ public class NodeService implements UDPService {
         // Within an instance of the algorithm, each upon rule is triggered at most once
         // for any round r
         if (instance.getCommittedRound() >= round) {
+
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                             "{0} - Already received COMMIT message for Consensus Instance {1}, Round {2}, ignoring",
@@ -491,15 +495,11 @@ public class NodeService implements UDPService {
                 consensusInstance, round);
 
         if (commitValue.isPresent() && instance.getCommittedRound() < round) {
-
             cancelTimer();
-
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
 
             String value = commitValue.get();
-
-            ClientData clientData = this.consensusToDataMapping.get(consensusInstance);
 
             // Check if this client request is up next
             while (!clientRequestQueue.isEmpty()) {
@@ -524,7 +524,6 @@ public class NodeService implements UDPService {
 
             // Append value to the ledger (must be synchronized to be thread-safe)
             synchronized (ledger) {
-
                 // Increment size of ledger to accommodate current instance
                 ledger.ensureCapacity(consensusInstance);
                 while (ledger.size() < consensusInstance - 1) {

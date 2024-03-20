@@ -98,4 +98,13 @@ class NodeServiceCrashTest {
         // Test node crash
     }
 
+    // Test reconciliation of nodes after partition
+    @Test
+    void testPartitionRecovery() {
+        // Test partition
+    }
+
+    // Consider - Client crash? How do we handle these, between appending and
+    // receiving acknowledgements
+
 }

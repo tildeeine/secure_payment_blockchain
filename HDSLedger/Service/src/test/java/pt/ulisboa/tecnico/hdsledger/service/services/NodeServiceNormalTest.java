@@ -282,7 +282,41 @@ class NodeServiceNormalTest {
     // Test that commit messages that have quorum add value to ledger
     @Test
     void testCommitAddsValueToLedger() {
-        // Test
+        // Get ledger length before commit
+        int ledgerLengthBefore = nodeService.getLedger().size();
+
+        // Set up client data
+        ClientData clientData = setupClientData();
+        clientData.setValue("NewCommit");
+
+        // Test setup: Ensure an InstanceInfo exists for the current consensus instance
+        int initialConsensusInstance = nodeService.getConsensusInstance().get();
+
+        InstanceInfo initialInstanceInfo = new InstanceInfo(mockClientData);
+        initialInstanceInfo.setCurrentRound(1); // Assuming the initial round starts at 1
+        nodeService.getInstanceInfo().put(initialConsensusInstance, initialInstanceInfo);
+
+        // Send quorum of prepare messages
+        int consensusInstance = nodeService.getConsensusInstance().get();
+        System.out.println("Consensus instance: " + consensusInstance); // !
+        int round = 1;
+        PrepareMessage prepareMessage = new PrepareMessage(clientData);
+        int quorum = 3 * ((nodeConfigs.length - 1) / 3) + 1;
+
+        for (int i = 0; i < quorum; i++) {
+            // Create prepare message
+            ConsensusMessage consensusMessage = new ConsensusMessageBuilder(String.valueOf(i + 1), Message.Type.COMMIT)
+                    .setConsensusInstance(consensusInstance)
+                    .setRound(round)
+                    .setMessage(prepareMessage.toJson())
+                    .build();
+
+            nodeService.uponCommit(consensusMessage);
+        }
+
+        // Assert nodeService.getLedger()
+        assertEquals(ledgerLengthBefore + 1, nodeService.getLedger().size());
+        assertEquals(clientData.getValue(), nodeService.getLedger().get(ledgerLengthBefore));
     }
 
     // Test that commit messages that do not have quorum do not add value to ledger
@@ -314,7 +348,9 @@ class NodeServiceNormalTest {
         // Test
     }
 
-    // Check that initiates round change if consensus is not reached within a round
+    // Check that initiates round change if consensus is not reached within a round.
+    // After timeout, nodes should trigger round change. should have new leader and
+    // consensus after round change.
     @Test
     void testRoundChangeIfNoConsensus() {
         // Test
