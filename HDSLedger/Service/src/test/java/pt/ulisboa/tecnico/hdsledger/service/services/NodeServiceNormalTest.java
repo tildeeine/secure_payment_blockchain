@@ -331,8 +331,22 @@ class NodeServiceNormalTest {
         // Send f commit messages
         int consensusInstance = nodeService.getConsensusInstance().get();
         int round = 1;
-        PrepareMessage prepareMessage = new PrepareMessage(clientData);
+        CommitMessage commitMessage = new CommitMessage(clientData);
+        int f = (nodeConfigs.length - 1) / 3;
 
+        for (int i = 0; i < f; i++) {
+            // Create message
+            ConsensusMessage consensusMessage = new ConsensusMessageBuilder(String.valueOf(i + 1), Message.Type.COMMIT)
+                    .setConsensusInstance(consensusInstance)
+                    .setRound(round)
+                    .setMessage(commitMessage.toJson())
+                    .build();
+
+            nodeService.uponCommit(consensusMessage);
+        }
+
+        // Assert nodeService.getLedger()
+        assertEquals(ledgerLengthBefore, nodeService.getLedger().size()); // Ledger should not have changed
     }
 
     // Test a byzantine leader sending malformed proposals. Honest nodes should not
