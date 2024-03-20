@@ -78,6 +78,9 @@ public class MessageBucket {
     }
 
     public Map<String, ConsensusMessage> getMessages(int instance, int round) {
+        if (bucket == null || bucket.get(instance) == null) {
+            return null;
+        }
         return bucket.get(instance).get(round);
     }
 }

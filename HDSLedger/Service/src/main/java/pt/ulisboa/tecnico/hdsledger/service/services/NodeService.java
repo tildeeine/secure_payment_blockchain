@@ -196,11 +196,16 @@ public class NodeService implements UDPService {
 
         RoundChangeMessage message = new RoundChangeMessage(config.getId(), Message.Type.ROUND_CHANGE, localConsensusInstance, round,instance.getPreparedRound(), instance.getPreparedData());
         
-        Collection <ConsensusMessage> prepareMessages = this.prepareMessages.getMessages(localConsensusInstance, round).values();
+        Map<String, ConsensusMessage> prep = this.prepareMessages.getMessages(localConsensusInstance, round);
+        Collection <ConsensusMessage> prepareMessages;
+        if (prep == null)
+            prepareMessages = null;
+        else
+            prepareMessages = prep.values();
 
         RoundChangeMessage highestPrepared = this.highestPrepared(roundChangeMessages, round);
         
-        if (highestPrepared != null) {
+        if (highestPrepared != null && prepareMessages != null) {
             // Get prepare messages with the round and value that we will use
             HashSet<ConsensusMessage> messagesToSend =
                 prepareMessages.stream().
@@ -236,14 +241,14 @@ public class NodeService implements UDPService {
 
         if (instance == null) {
             return;
-        }
+        } 
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
                         "{0} - Received ROUND_CHANGE message from {1} Consensus Instance {2}, Round {3}",
                         config.getId(), message.getSenderId(), message.getConsensusInstance(), message.getRound()));
 
-        if (!verifyClientData(message.getClientData())) {
+        if (message.getClientData() != null && !verifyClientData(message.getClientData())) {
             System.out.println("Message is not valid");
             return;
         }
@@ -255,6 +260,7 @@ public class NodeService implements UDPService {
         filter(entry -> entry.getConsensusInstance() == localConsensusInstance).filter(entry -> entry.getRound() == instance.getCurrentRound()).count();
 
         if (numMessages >=  this.quorum && this.config.isLeader() && !this.rule1 && this.justifyRoundChange(this.roundChangeMessages)) {
+            
             this.rule1 = true;
 
             ClientData value;
@@ -283,7 +289,6 @@ public class NodeService implements UDPService {
             filter(entry -> entry.getConsensusInstance() == localConsensusInstance).filter(entry -> entry.getRound() > instance.getCurrentRound()).count();
         // Received f+1 round_change. Line 5-10
         if (numMessages > (Math.floorDiv(nodesConfig.length - 1, 3)+1) && !this.rule2) {
-            System.out.println("Rule 2");
             this.rule2 = true;
 
             int newRound = roundChangeMessages.stream()
@@ -322,8 +327,8 @@ public class NodeService implements UDPService {
         Stream<RoundChangeMessage> messages = roundChangeMessages.stream().
             filter(entry->entry.getConsensusInstance() == localConsensusInstance).filter(entry->entry.getRound()==instance.getCurrentRound());
 
-        // Quorum with no prepared round
-        if (messages.filter(entry->entry.getPreparedRound()==-1).count() > this.quorum) {
+            // Quorum with no prepared round
+        if (messages.filter(entry->entry.getPreparedRound()==-1).count() >= this.quorum) {
             return true;
         }
 
@@ -362,10 +367,8 @@ public class NodeService implements UDPService {
             }
         }
 
-
-        if (num_messages > this.quorum) 
+        if (num_messages >= this.quorum) 
             return true;
-
 
         return false;
     }
@@ -596,11 +599,8 @@ public class NodeService implements UDPService {
         Optional<String> preparedValue = prepareMessages.hasValidPrepareQuorum(config.getId(), consensusInstance,
                 round);
         
-        //System.out.println("Is there a prepare quorum? " + preparedValue.isPresent());
-
         if (preparedValue.isPresent() && instance.getPreparedRound() < round) {
             
-            //System.out.println("There is a prepare quorum");
             Optional<ConsensusMessage> prepMessage = this.prepareMessages.getMessages(consensusInstance, round).values().stream().filter(entry->entry.deserializePrepareMessage().getClientData().getValue().equals(preparedValue.get())).findAny();
             
             if (!prepMessage.isPresent()) {
