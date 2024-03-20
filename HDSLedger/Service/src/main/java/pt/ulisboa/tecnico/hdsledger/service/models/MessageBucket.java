@@ -40,44 +40,39 @@ public class MessageBucket {
         bucket.get(consensusInstance).get(round).put(message.getSenderId(), message);
     }
 
-    public Optional<ClientData> hasValidPrepareQuorum(String nodeId, int instance, int round) {
+    public Optional<String> hasValidPrepareQuorum(String nodeId, int instance, int round) {
         // Create mapping of value to frequency
-        HashMap<ClientData, Integer> frequency = new HashMap<>();
-        // System.out.println(bucket.get(instance));
-        for (int key : bucket.keySet()) {
-            System.out.println("KEYYYY");
-            System.out.println(key);
-        }
-
+        HashMap<String, Integer> frequency = new HashMap<>();
+        
         bucket.get(instance).get(round).values().forEach((message) -> {
             PrepareMessage prepareMessage = message.deserializePrepareMessage();
-            ClientData value = prepareMessage.getClientData();
+            String value = prepareMessage.getClientData().getValue();
             frequency.put(value, frequency.getOrDefault(value, 0) + 1);
         });
 
         // Only one value (if any, thus the optional) will have a frequency
         // greater than or equal to the quorum size
-        return frequency.entrySet().stream().filter((Map.Entry<ClientData, Integer> entry) -> {
+        return frequency.entrySet().stream().filter((Map.Entry<String, Integer> entry) -> {
             return entry.getValue() >= quorumSize;
-        }).map((Map.Entry<ClientData, Integer> entry) -> {
+        }).map((Map.Entry<String, Integer> entry) -> {
             return entry.getKey();
         }).findFirst();
     }
 
-    public Optional<ClientData> hasValidCommitQuorum(String nodeId, int instance, int round) {
+    public Optional<String> hasValidCommitQuorum(String nodeId, int instance, int round) {
         // Create mapping of value to frequency
-        HashMap<ClientData, Integer> frequency = new HashMap<>();
+        HashMap<String, Integer> frequency = new HashMap<>();
         bucket.get(instance).get(round).values().forEach((message) -> {
             CommitMessage commitMessage = message.deserializeCommitMessage();
-            ClientData value = commitMessage.getData();
+            String value = commitMessage.getData().getValue();
             frequency.put(value, frequency.getOrDefault(value, 0) + 1);
         });
 
         // Only one value (if any, thus the optional) will have a frequency
         // greater than or equal to the quorum size
-        return frequency.entrySet().stream().filter((Map.Entry<ClientData, Integer> entry) -> {
+        return frequency.entrySet().stream().filter((Map.Entry<String, Integer> entry) -> {
             return entry.getValue() >= quorumSize;
-        }).map((Map.Entry<ClientData, Integer> entry) -> {
+        }).map((Map.Entry<String, Integer> entry) -> {
             return entry.getKey();
         }).findFirst();
     }

@@ -234,6 +234,10 @@ public class NodeService implements UDPService {
         int localConsensusInstance = this.consensusInstance.get();
         InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
 
+        if (instance == null) {
+            return;
+        }
+
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
                         "{0} - Received ROUND_CHANGE message from {1} Consensus Instance {2}, Round {3}",
@@ -457,6 +461,13 @@ public class NodeService implements UDPService {
      * @param message Message to be handled
      */
     public void uponPrePrepare(ConsensusMessage message) {
+        int localConsensusInstance = this.consensusInstance.get();
+        InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
+
+        if (instance == null) {
+            System.out.println("No instance initialized");
+            return;
+        }
 
         int consensusInstance = message.getConsensusInstance();
         int round = message.getRound();
@@ -472,6 +483,7 @@ public class NodeService implements UDPService {
                 MessageFormat.format(
                         "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}",
                         config.getId(), senderId, consensusInstance, round));
+
 
         if (!verifyClientData(clientData)) {
             System.out.println("Message is not valid");
@@ -524,6 +536,13 @@ public class NodeService implements UDPService {
      * @param message Message to be handled
      */
     public synchronized void uponPrepare(ConsensusMessage message) {
+        int localConsensusInstance = this.consensusInstance.get();
+        InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
+
+        if (instance == null) {
+            System.out.println("No instance exists");
+            return;
+        }
 
         int consensusInstance = message.getConsensusInstance();
         int round = message.getRound();
@@ -548,7 +567,7 @@ public class NodeService implements UDPService {
 
         // Set instance values
         this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(clientData));
-        InstanceInfo instance = this.instanceInfo.get(consensusInstance);
+        instance = this.instanceInfo.get(consensusInstance);
 
         // Within an instance of the algorithm, each upon rule is triggered at most once
         // for any round r
@@ -574,18 +593,31 @@ public class NodeService implements UDPService {
         }
 
         // Find value with valid quorum
-        Optional<ClientData> preparedData = prepareMessages.hasValidPrepareQuorum(config.getId(), consensusInstance,
+        Optional<String> preparedValue = prepareMessages.hasValidPrepareQuorum(config.getId(), consensusInstance,
                 round);
+        
+        //System.out.println("Is there a prepare quorum? " + preparedValue.isPresent());
 
-        if (preparedData.isPresent() && instance.getPreparedRound() < round) {
-            instance.setPreparedData(preparedData.get());
+        if (preparedValue.isPresent() && instance.getPreparedRound() < round) {
+            
+            //System.out.println("There is a prepare quorum");
+            Optional<ConsensusMessage> prepMessage = this.prepareMessages.getMessages(consensusInstance, round).values().stream().filter(entry->entry.deserializePrepareMessage().getClientData().getValue().equals(preparedValue.get())).findAny();
+            
+            if (!prepMessage.isPresent()) {
+                System.out.println("Error getting client data");
+                return;
+            }
+
+            ClientData preparedData = prepMessage.get().deserializePrepareMessage().getClientData();
+
+            instance.setPreparedData(preparedData);
             instance.setPreparedRound(round);
 
             // Must reply to prepare message senders
             Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(consensusInstance, round)
                     .values();
 
-            CommitMessage c = new CommitMessage(preparedData.get());
+            CommitMessage c = new CommitMessage(preparedData);
             instance.setCommitMessage(c);
 
             sendersMessage.forEach(senderMessage -> {
@@ -608,6 +640,12 @@ public class NodeService implements UDPService {
      * @param message Message to be handled
      */
     public synchronized void uponCommit(ConsensusMessage message) {
+        int localConsensusInstance = this.consensusInstance.get();
+        InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
+
+        if (instance == null) {
+            return;
+        }
 
         int consensusInstance = message.getConsensusInstance();
         int round = message.getRound();
@@ -623,7 +661,7 @@ public class NodeService implements UDPService {
 
         commitMessages.addMessage(message);
 
-        InstanceInfo instance = this.instanceInfo.get(consensusInstance);
+        instance = this.instanceInfo.get(consensusInstance);
 
         if (instance == null) {
             // Should never happen because only receives commit as a response to a prepare
@@ -644,18 +682,24 @@ public class NodeService implements UDPService {
             return;
         }
 
-        Optional<ClientData> commitValue = commitMessages.hasValidCommitQuorum(config.getId(),
+        Optional<String> commitValue = commitMessages.hasValidCommitQuorum(config.getId(),
                 consensusInstance, round);
 
         if (commitValue.isPresent() && instance.getCommittedRound() < round) {
+            System.out.println("Value to commit: " + commitValue.get());
+            Optional<ConsensusMessage> prepMessage = this.commitMessages.getMessages(consensusInstance, round).values().stream().filter(entry->entry.deserializeCommitMessage().getData().getValue().equals(commitValue.get())).findAny();
+             
+            if (!prepMessage.isPresent()) {
+                System.out.println("Error getting client data");
+                return;
+            }
+
+            ClientData commitedData = prepMessage.get().deserializeCommitMessage().getData();
 
             cancelTimer();
 
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
-
-            ClientData commitedData = commitValue.get();
-
             
             ClientData clientData = this.consensusToDataMapping.get(consensusInstance);
             
@@ -731,10 +775,14 @@ public class NodeService implements UDPService {
 
     public void handleClientRequest(ClientMessage message) {
 
+        if (message == null || message.getClientData() == null)
+            return;
+
         ClientData clientData = message.getClientData();
         if (!this.verifyClientData(clientData)){
             return;
         }
+
         clientRequestQueue.offer(clientData);
         this.startConsensus(clientData);
     }
