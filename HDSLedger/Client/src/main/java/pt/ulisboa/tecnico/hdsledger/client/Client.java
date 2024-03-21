@@ -65,11 +65,11 @@ public class Client {
             }).start();
 
             // Continuous loop to read user commands
-            System.out.print("Commands: \n"
-                    + "transfer <amount> <PublicKey destination> - Transfer amount to client with key destinationKey\n"
-                    + "balance - Check your current balance\n"
-                    + "check <PublicKey userKey> - Check balance of client with key userKey\n"
-                    + "quit - Exit the client application\n");
+            System.out.println("Commands: \n"
+                    + "\ttransfer <amount> <destination> - Transfer amount to client with key destinationKey\n"
+                    + "\tbalance - Check your current balance\n"
+                    + "\tcheck <user> - Check balance of client with key userKey\n"
+                    + "\tquit - Exit the client application\n");
             while (true) {
                 System.out.print("Enter command: ");
                 String userCommand = scanner.nextLine().trim().toLowerCase();
@@ -120,10 +120,10 @@ public class Client {
                         break;
                     case "help":
                         System.out.println("Commands: \n"
-                                + "transfer <amount> <PublicKey destination> - Transfer amount to client with key destinationKey\n"
-                                + "balance - Check your current balance\n"
-                                + "check <PublicKey userKey> - Check balance of client with key userKey\n"
-                                + "quit - Exit the client application\n");
+                                + "\ttransfer <amount> <destination> - Transfer amount to client with key destinationKey\n"
+                                + "\tbalance - Check your current balance\n"
+                                + "\tcheck <user> - Check balance of client with key userKey\n"
+                                + "\tquit - Exit the client application\n");
                         break;
                     default:
                         System.out.println("Unknown command. Try again.");
