@@ -21,6 +21,7 @@ import pt.ulisboa.tecnico.hdsledger.service.services.NodeService;
 import pt.ulisboa.tecnico.hdsledger.communication.PrePrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.RoundChangeMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
 
 @ExtendWith(MockitoExtension.class)
 public class NodeServiceTest {
@@ -64,6 +65,9 @@ public class NodeServiceTest {
     @Mock
     private Message mockPrepareMessage;
 
+    @Mock 
+    private ClientData clientData;
+
     @BeforeEach
     public void setUp() {
         leaderNodeService = nodeSetup(leaderId, mockLeaderLink);
@@ -103,6 +107,7 @@ public class NodeServiceTest {
         // Mock that sender is leader
         when(mockConsensusMessage.getSenderId()).thenReturn(leaderId);
         when(mockConsensusMessage.deserializePrePrepareMessage()).thenReturn(mockPrePrepareMessage);
+        when(mockPrePrepareMessage.getClientData()).thenReturn(clientData);
         when(mockPrePrepareMessage.getClientData().getValue()).thenReturn("val");
         // Call method
         leaderNodeService.uponPrePrepare(mockConsensusMessage);
@@ -123,9 +128,6 @@ public class NodeServiceTest {
     @Test
     public void testUponPrePrepareNonLeader() {
         // Mock that sender is not leader
-        when(mockConsensusMessage.getSenderId()).thenReturn(nodeId);
-        when(mockConsensusMessage.deserializePrePrepareMessage()).thenReturn(mockPrePrepareMessage);
-        when(mockPrePrepareMessage.getClientData().getValue()).thenReturn("val");
 
         // Call method
         nodeService.uponPrePrepare(mockConsensusMessage);
@@ -140,6 +142,7 @@ public class NodeServiceTest {
     @Test
     public void testHandleClientRequestLeader() {
         when(mockClientMessage.getSenderId()).thenReturn(clientId);
+        when(mockClientMessage.getClientData()).thenReturn(clientData);
         when(mockClientMessage.getClientData().getValue()).thenReturn("val");
 
         // Call method
