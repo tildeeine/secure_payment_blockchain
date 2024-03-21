@@ -29,7 +29,6 @@ public class Client {
     public static void main(String[] args) throws IOException, ClassNotFoundException {
         try {
             String id = args[0];
-            float startBalance = Float.parseFloat(args[1]);
             Scanner scanner = new Scanner(System.in);
 
             // Set up the link to the nodes
@@ -40,6 +39,7 @@ public class Client {
             ProcessConfig leaderConfig = Arrays.stream(nodeConfigs).filter(ProcessConfig::isLeader).findAny().get();
             ProcessConfig[] clientConfigs = new ProcessConfigBuilder().fromFile(CLIENTCONFIGPATH);
             ProcessConfig clientConfig = Arrays.stream(clientConfigs).filter(c -> c.getId().equals(id)).findAny().get();
+            Float startBalance = clientConfig.getStartBalance();
 
             LOGGER.log(Level.INFO, MessageFormat.format("{0} - Running at {1}:{2}; is leader: {3}",
                     clientConfig.getId(), clientConfig.getHostname(), clientConfig.getPort(),

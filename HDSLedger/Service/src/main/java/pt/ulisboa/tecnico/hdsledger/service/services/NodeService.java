@@ -113,6 +113,13 @@ public class NodeService implements UDPService {
         link.send(nodeId, message);
     }
 
+    public void initialiseClientBalances(ProcessConfig[] clientConfigs) {
+        for (ProcessConfig clientConfig : clientConfigs) {
+            clientBalances.put(clientConfig.getId(), clientConfig.getStartBalance());
+        }
+        System.out.println("Starting balances: " + clientBalances); // !debugging
+    }
+
     public void sendClientMessage(Message message) {
         link.broadcast(message);
     }

@@ -15,8 +15,6 @@ server_configs = [
     "client_config.json"
 ]
 
-start_balance = 50
-
 server_config = server_configs[0]
 client_config = server_configs[1]
 
@@ -48,7 +46,7 @@ with open(f"Client/src/main/resources/{client_config}") as f:
         pid = os.fork()
         if pid == 0:
             os.system(
-                    f"{terminal} sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']} {start_balance}' ; sleep 500\"")
+                    f"{terminal} sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']}' ; sleep 500\"")
             sys.exit()
 
 signal.signal(signal.SIGINT, quit_handler)
