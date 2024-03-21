@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
 import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
@@ -42,6 +43,7 @@ public class MessageBucket {
     public Optional<String> hasValidPrepareQuorum(String nodeId, int instance, int round) {
         // Create mapping of value to frequency
         HashMap<String, Integer> frequency = new HashMap<>();
+        
         bucket.get(instance).get(round).values().forEach((message) -> {
             PrepareMessage prepareMessage = message.deserializePrepareMessage();
             String value = prepareMessage.getClientData().getValue();
@@ -62,7 +64,7 @@ public class MessageBucket {
         HashMap<String, Integer> frequency = new HashMap<>();
         bucket.get(instance).get(round).values().forEach((message) -> {
             CommitMessage commitMessage = message.deserializeCommitMessage();
-            String value = commitMessage.getValue();
+            String value = commitMessage.getData().getValue();
             frequency.put(value, frequency.getOrDefault(value, 0) + 1);
         });
 
@@ -76,6 +78,9 @@ public class MessageBucket {
     }
 
     public Map<String, ConsensusMessage> getMessages(int instance, int round) {
+        if (bucket == null || bucket.get(instance) == null) {
+            return null;
+        }
         return bucket.get(instance).get(round);
     }
 }

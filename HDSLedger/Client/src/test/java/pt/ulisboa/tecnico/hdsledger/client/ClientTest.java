@@ -1,3 +1,5 @@
+package pt.ulisboa.tecnico.hdsledger.client;
+
 import pt.ulisboa.tecnico.hdsledger.client.Client;
 
 import org.mockito.Mockito;

@@ -8,7 +8,7 @@ public class InstanceInfo {
 
     private int currentRound = 1;
     private int preparedRound = -1;
-    private String preparedValue;
+    private ClientData preparedData;
     private CommitMessage commitMessage;
     private ClientData clientData;
     private int committedRound = -1;
@@ -33,12 +33,12 @@ public class InstanceInfo {
         this.preparedRound = preparedRound;
     }
 
-    public String getPreparedValue() {
-        return preparedValue;
+    public ClientData getPreparedData() {
+        return preparedData;
     }
 
-    public void setPreparedValue(String preparedValue) {
-        this.preparedValue = preparedValue;
+    public void setPreparedData(ClientData preparedData) {
+        this.preparedData = preparedData;
     }
 
     public ClientData getClientData() {
