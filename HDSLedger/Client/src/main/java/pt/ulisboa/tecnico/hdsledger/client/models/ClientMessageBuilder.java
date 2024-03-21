@@ -20,9 +20,9 @@ public class ClientMessageBuilder {
         this.privateKey = processConfig.getPrivateKey();
     }
 
-    public ClientMessage buildMessage(String payload, String senderID) {
+    public ClientMessage buildMessage(String payload, String senderID, Message.Type messagetype) {
 
-        ClientMessage clientMessage = new ClientMessage(senderID, Message.Type.APPEND);
+        ClientMessage clientMessage = new ClientMessage(senderID, messagetype);
 
         ClientData clientData = new ClientData();
         clientData.setClientID(senderID);
@@ -35,10 +35,7 @@ public class ClientMessageBuilder {
             System.out.println("Error signing value");
         }
 
-        clientData.setValue(payload.split(" ")[0]); // ! do we on getAmount every check that value set is the same that
-                                                    // is signed in
-        // the signature?
-
+        clientData.setValue(payload.split(" ")[0]);
         clientMessage.setClientData(clientData);
 
         return clientMessage;

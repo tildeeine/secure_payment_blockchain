@@ -15,7 +15,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
-import pt.ulisboa.tecnico.hdsledger.client.models.Account;
+import pt.ulisboa.tecnico.hdsledger.client.models.Wallet;
 
 public class ClientService implements UDPServiceClient {
 
@@ -34,11 +34,13 @@ public class ClientService implements UDPServiceClient {
 
     private int allowedFaults;
 
+    private Wallet wallet;
+
     // < requestID, confirmationMessage count>
     private Map<Integer, Integer> requestTracker = new ConcurrentHashMap<>();
 
     public ClientService(Link link, ProcessConfig config,
-            ProcessConfig leaderConfig, ProcessConfig[] nodesConfig, Account account) {
+            ProcessConfig leaderConfig, ProcessConfig[] nodesConfig, Wallet wallet) {
 
         this.link = link;
         this.config = config;
@@ -46,6 +48,7 @@ public class ClientService implements UDPServiceClient {
         this.allowedFaults = numberOfFaults(nodesConfig.length);
         System.out.println(this.allowedFaults);
         this.timeout = 5000;
+        this.wallet = wallet;
     }
 
     public void sendClientMessage(ClientMessage clientMessage) { // ! legacy from part1
@@ -55,16 +58,23 @@ public class ClientService implements UDPServiceClient {
 
     public void clientTransfer(ClientMessage transferMessage) {
         // Create a message
-        // Broadcast
-        // Wait for ACK
-        // Validate ACK //? handleConfirmationMessage
-        // Some other verification of transaction?
+        this.requestTracker.put(transferMessage.getClientData().getRequestID(), 0);
+        link.broadcast(transferMessage);
     }
 
-    public void checkBalance() {
-        // Create message with balance request //! add handling of checks in nodeservice
-        // Broadcast
-        // Wait for response
+    public void checkBalance(ClientMessage balanceRequest) {
+        // Create message with balance request
+        String userKey = balanceRequest.getClientData().getValue();
+        link.broadcast(balanceRequest);
+    }
+
+    public void handleBalanceResponse(ClientMessage balanceResponse) {
+        // Check if the balance response is for this client
+        if (balanceResponse.getClientData().getClientID().equals(this.config.getId())) {
+            // Update the balance
+            this.wallet.setBalance(Float.parseFloat(balanceResponse.getClientData().getValue()));
+            // Return value to user
+        }
     }
 
     public ProcessConfig getConfig() {
@@ -76,7 +86,7 @@ public class ClientService implements UDPServiceClient {
             timer.cancel();
     }
 
-    private void startTimer() {
+    private void startTimer() { // ! Never used
         cancelTimer();
         TimerTask task = new TimerTask() {
             @Override
@@ -152,6 +162,14 @@ public class ClientService implements UDPServiceClient {
 
                                     ClientMessage confirmationMessage = (ClientMessage) message;
                                     handleConfirmationMessage(confirmationMessage);
+                                }
+
+                                case BALANCE -> {
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} - Received BALANCE message from {1}",
+                                                    config.getId(), message.getSenderId()));
+
+                                    handleBalanceResponse((ClientMessage) message);
                                 }
 
                                 default ->

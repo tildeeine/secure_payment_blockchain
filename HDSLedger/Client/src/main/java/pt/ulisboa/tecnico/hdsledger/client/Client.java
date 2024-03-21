@@ -2,13 +2,14 @@ package pt.ulisboa.tecnico.hdsledger.client;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.client.models.ClientMessageBuilder;
-import pt.ulisboa.tecnico.hdsledger.client.models.Account;
+import pt.ulisboa.tecnico.hdsledger.client.models.Wallet;
 import pt.ulisboa.tecnico.hdsledger.client.services.ClientService;
 import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfigBuilder;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
+import pt.ulisboa.tecnico.hdsledger.communication.Message;
 
 import java.text.MessageFormat;
 import java.util.logging.Level;
@@ -23,7 +24,7 @@ public class Client {
     private static final String CLIENTCONFIGPATH = "src/main/resources/client_config.json";
     private static final String NODECONFIGPATH = "src/main/resources/regular_config.json";
 
-    private static Account account;
+    private static Wallet wallet;
 
     public static void main(String[] args) throws IOException, ClassNotFoundException {
         try {
@@ -49,11 +50,11 @@ public class Client {
 
             link.addClient(clientConfigs);
 
-            account = new Account(clientConfig.getId(), startBalance, clientConfig.getPrivateKey(),
+            wallet = new Wallet(clientConfig.getId(), startBalance, clientConfig.getPrivateKey(),
                     clientConfig.getPublicKey());
 
             // Create a clientService for sending messages to nodes
-            ClientService clientService = new ClientService(link, clientConfig, leaderConfig, nodeConfigs, account);
+            ClientService clientService = new ClientService(link, clientConfig, leaderConfig, nodeConfigs, wallet);
             // Create a ClientMessageBuilder for creating the messages
             ClientMessageBuilder clientMessageBuilder = new ClientMessageBuilder(clientConfig);
             // Start a thread to listen for messages from nodes
@@ -90,27 +91,29 @@ public class Client {
                             System.out.println("Amount must be a positive integer.");
                             break;
                         }
-                        if (amount > account.getBalance()) {
+                        if (amount > wallet.getBalance()) {
                             System.out.println("Insufficient funds for this operation.");
                             break;
                         }
                         String destinationKey = parts[1]; // Consider adding a check for valid public key
                         ClientMessage transferMessage = clientMessageBuilder.buildMessage(transferInput,
-                                clientConfig.getId());
+                                clientConfig.getId(), Message.Type.TRANSFER);
                         // Send the message to nodes
                         clientService.clientTransfer(transferMessage);
                         break;
                     case "balance":
-                        System.out.println("Your current balance:   " + account.getBalance());
+                        System.out.println("Your current balance:   " + wallet.getBalance());
+                        ClientMessage selfBalanceRequest = clientMessageBuilder.buildMessage(wallet.getId(),
+                                clientConfig.getId(), Message.Type.BALANCE); // payload = dest public key
+                        clientService.checkBalance(selfBalanceRequest);
+
                         break;
                     case "check":
                         System.out.println("Checking balance...");
-                        String userKey = userCommand.substring("check".length()).trim(); // ? Should we expect our
-                                                                                         // client to input the
-                                                                                         // receiving clients public
-                                                                                         // key?
-                        // clientService.checkBalance(userKey); // ! implement, checking other clients
-                        // balance
+                        String userId = userCommand.substring("check".length()).trim(); // Uses client id
+                        ClientMessage balanceRequest = clientMessageBuilder.buildMessage(userId,
+                                clientConfig.getId(), Message.Type.BALANCE); // payload = dest public key
+                        clientService.checkBalance(balanceRequest);
                         break;
                     case "quit":
                         quitHandler();

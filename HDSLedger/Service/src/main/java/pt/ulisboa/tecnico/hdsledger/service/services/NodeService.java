@@ -72,15 +72,12 @@ public class NodeService implements UDPService {
 
     // Ledger (for now, just a list of strings)
     private ArrayList<String> ledger = new ArrayList<String>();
-
-    // Client requests
+    // Current queue of client requests
     private Queue<ClientData> clientRequestQueue;
-
-    private Map<Integer, ClientData> consensusToDataMapping = new ConcurrentHashMap<>(); 
-
-    // private String clientRequestID;
-
-    // private String inputValue;
+    // Map of consensus instances to client data, used for consensus messages
+    private Map<Integer, ClientData> consensusToDataMapping = new ConcurrentHashMap<>();
+    // Map of clientID strings to client balances, used for balanceRequests
+    private Map<String, Float> clientBalances = new ConcurrentHashMap<>();
 
     // if the rules have been done already
     private boolean rule1 = false;
@@ -100,7 +97,7 @@ public class NodeService implements UDPService {
         this.roundChangeMessages = new ArrayList<RoundChangeMessage>();
 
         this.timeout = 5000;
-        
+
         this.clientRequestQueue = new LinkedList<>();
     }
 
@@ -216,7 +213,8 @@ public class NodeService implements UDPService {
 
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
-            // this.link.broadcast(this.createConsensusMessage(value, localConsensusInstance, instance.getCurrentRound()));
+            // this.link.broadcast(this.createConsensusMessage(value,
+            // localConsensusInstance, instance.getCurrentRound()));
 
             startTimer();
         }
@@ -305,7 +303,8 @@ public class NodeService implements UDPService {
             InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
-            this.link.broadcast(this.createConsensusMessage(clientData, localConsensusInstance, instance.getCurrentRound()));
+            this.link.broadcast(
+                    this.createConsensusMessage(clientData, localConsensusInstance, instance.getCurrentRound()));
         } else {
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Node is not leader, waiting for PRE-PREPARE message", config.getId()));
@@ -428,7 +427,7 @@ public class NodeService implements UDPService {
             // Must reply to prepare message senders
             Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(consensusInstance, round)
                     .values();
-            if (!this.verifyClientData(clientData)){
+            if (!this.verifyClientData(clientData)) {
                 return;
             }
             CommitMessage c = new CommitMessage(preparedValue.get());
@@ -497,17 +496,16 @@ public class NodeService implements UDPService {
 
             String value = commitValue.get();
 
-            
             ClientData clientData = this.consensusToDataMapping.get(consensusInstance);
-            
 
             // Check if this client request is up next
             while (!clientRequestQueue.isEmpty()) {
                 // Peek at the next client request without removing it from the queue
                 ClientData nextClientRequest = clientRequestQueue.peek();
-                
+
                 // Check if the next client request matches the current client request
-                if (nextClientRequest.getClientID().equals(clientData.getClientID()) && nextClientRequest.getRequestID() == clientData.getRequestID()) {
+                if (nextClientRequest.getClientID().equals(clientData.getClientID())
+                        && nextClientRequest.getRequestID() == clientData.getRequestID()) {
                     // This client request is up next, break out of the loop
                     clientRequestQueue.poll();
                     break;
@@ -520,8 +518,6 @@ public class NodeService implements UDPService {
                     e.printStackTrace();
                 }
             }
-
-
 
             // Append value to the ledger (must be synchronized to be thread-safe)
             synchronized (ledger) {
@@ -553,11 +549,11 @@ public class NodeService implements UDPService {
         }
     }
 
-    public boolean verifyClientData(ClientData clientData){
-        byte [] signature = clientData.getSignature();
+    public boolean verifyClientData(ClientData clientData) {
+        byte[] signature = clientData.getSignature();
         String value = clientData.getValue();
         try {
-            if (Authenticate.verifyMessage(config.getNodePubKey(clientData.getClientID()), value, signature)){
+            if (Authenticate.verifyMessage(config.getNodePubKey(clientData.getClientID()), value, signature)) {
                 return true;
             }
         } catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
@@ -568,14 +564,27 @@ public class NodeService implements UDPService {
         return false;
     }
 
-    public void handleClientRequest(ClientMessage message) {
-
+    public void handleTransfer(ClientMessage message) {
         ClientData clientData = message.getClientData();
-        if (!this.verifyClientData(clientData)){
+        if (!this.verifyClientData(clientData)) {
+            return;
+        }
+        clientRequestQueue.offer(clientData); // ? Should this be on both the transfer and balance request?
+        // Add handling
+    }
+
+    public void handleBalanceRequest(ClientMessage message) {
+        ClientData clientData = message.getClientData();
+        if (!this.verifyClientData(clientData)) {
             return;
         }
         clientRequestQueue.offer(clientData);
-        this.startConsensus(clientData);
+        // Get the local balance of the id that the client is requesting
+        String balanceUser = clientData.getValue();
+        float balance = clientBalances.getOrDefault(balanceUser, 0.0f);
+
+        // Send the balance back to the client //! Need to send the actual balance
+
     }
 
     @Override
@@ -599,9 +608,11 @@ public class NodeService implements UDPService {
 
                             switch (message.getType()) {
 
-                                case APPEND -> {
-                                    handleClientRequest((ClientMessage) message);
-                                }
+                                case TRANSFER ->
+                                    handleTransfer((ClientMessage) message);
+
+                                case BALANCE ->
+                                    handleBalanceRequest((ClientMessage) message);
 
                                 case PRE_PREPARE ->
                                     uponPrePrepare((ConsensusMessage) message);
