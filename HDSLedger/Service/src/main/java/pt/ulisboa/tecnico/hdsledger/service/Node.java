@@ -50,8 +50,9 @@ public class Node {
             // Services that implement listen from UDPService
             this.nodeService = new NodeService(linkToNodes, nodeConfig, leaderConfig,
                     nodeConfigs);
+
             if (nodeConfig.isLeader())
-                return;
+                Thread.sleep(30000);
             
             
             nodeService.listen();
