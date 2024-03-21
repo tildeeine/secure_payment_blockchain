@@ -76,10 +76,7 @@ public class Client {
                 switch (userCommand.split(" ")[0]) {
                     case "transfer":
                         // Extract the payload from the user input
-                        String transferInput = userCommand.substring("transfer".length()).trim(); // ? Should we expect
-                                                                                                  // our client to input
-                                                                                                  // the receiving
-                                                                                                  // clients public key?
+                        String transferInput = userCommand.substring("transfer".length()).trim(); // String amount, dst
                         String[] parts = transferInput.split(" ");
                         if (parts.length != 2) {
                             System.out.println(
@@ -91,7 +88,7 @@ public class Client {
                             System.out.println("Amount must be a positive integer.");
                             break;
                         }
-                        if (amount > wallet.getBalance()) {
+                        if (amount > wallet.getBalance()) { // ! Consider removing, wallets easy to go out of sync
                             System.out.println("Insufficient funds for this operation.");
                             break;
                         }

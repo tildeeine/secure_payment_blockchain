@@ -8,6 +8,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
+import java.util.HashMap;
 
 import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
 import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
@@ -24,6 +25,8 @@ public class ClientService implements UDPServiceClient {
     private final ProcessConfig[] nodesConfig;
     // Current node is leader
     private final ProcessConfig config;
+    // Keep track of balance responses to request IDs
+    Map<Integer, Map<Float, Integer>> balanceTracker = new HashMap<>();
 
     // Link to communicate with nodes
     private final Link link;
@@ -65,15 +68,40 @@ public class ClientService implements UDPServiceClient {
     public void checkBalance(ClientMessage balanceRequest) {
         // Create message with balance request
         String userKey = balanceRequest.getClientData().getValue();
+        this.balanceTracker.put(balanceRequest.getClientData().getRequestID(), new ConcurrentHashMap<>()); // !Make sure
+                                                                                                           // request ID
+                                                                                                           // is used in
+                                                                                                           // response
         link.broadcast(balanceRequest);
     }
 
     public void handleBalanceResponse(ClientMessage balanceResponse) {
         // Check if the balance response is for this client
-        if (balanceResponse.getClientData().getClientID().equals(this.config.getId())) {
-            // Update the balance
-            this.wallet.setBalance(Float.parseFloat(balanceResponse.getClientData().getValue()));
-            // Return value to user
+        ClientData clientData = balanceResponse.getClientData();
+        String clientID = clientData.getClientID();
+        int requestID = clientData.getRequestID();
+
+        if (!clientID.equals(this.config.getId())) {
+            return;
+        }
+        // Update the balance
+        if (!balanceTracker.containsKey(requestID)) {
+            return;
+        }
+        Map<Float, Integer> balances = balanceTracker.get(requestID);
+        float balance = Float.parseFloat(clientData.getValue());
+
+        // Get count, increment, and replace
+        int newCount = balances.getOrDefault(balance, 0) + 1;
+        balances.put(balance, newCount);
+
+        // Check if we have quorum for value
+        if (newCount == 2 * this.allowedFaults + 1) { // 2f+1
+            LOGGER.log(Level.INFO, MessageFormat.format(
+                    "{0} - Recieved {1} valid confirmations on balance check, balance verified.",
+                    config.getId(), newCount, balanceResponse.getMessageId()));
+            System.out.println("Your balance is: " + balance);
+            balanceTracker.remove(requestID); // To not process redundant value responses
         }
     }
 

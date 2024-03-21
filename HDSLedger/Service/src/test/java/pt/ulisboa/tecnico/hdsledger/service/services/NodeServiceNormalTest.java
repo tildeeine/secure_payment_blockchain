@@ -299,7 +299,7 @@ class NodeServiceNormalTest {
         int ledgerLengthBefore = nodeService.getLedger().size();
 
         // Set up client data
-        ClientData clientData = setupClientData("NewCommit");
+        ClientData clientData = setupClientData("20 client2");
 
         // Test setup: Ensure an InstanceInfo exists for the current consensus instance
         int initialConsensusInstance = nodeService.getConsensusInstance().get();

@@ -69,7 +69,7 @@ public class NodeService implements UDPService {
     // Consensus instance information per consensus instance
     private final Map<Integer, InstanceInfo> instanceInfo = new ConcurrentHashMap<>();
     // Current consensus instance
-    private final AtomicInteger consensusInstance = new AtomicInteger(1); // ! Changed to initialize at 1
+    private final AtomicInteger consensusInstance = new AtomicInteger(1);
     // Last decided consensus instance
     private final AtomicInteger lastDecidedConsensusInstance = new AtomicInteger(1);
 
@@ -413,12 +413,12 @@ public class NodeService implements UDPService {
      *
      * @param inputValue Value to value agreed upon
      */
-    public void startConsensus(ClientData clientData) {
-
+    public void startConsensus(ClientData transactionData) {
         // Set initial consensus values
         int localConsensusInstance = getConsensusInstance().incrementAndGet();
-        InstanceInfo existingConsensus = this.instanceInfo.put(localConsensusInstance, new InstanceInfo(clientData));
-        this.consensusToDataMapping.put(localConsensusInstance, clientData);
+        InstanceInfo existingConsensus = this.instanceInfo.put(localConsensusInstance,
+                new InstanceInfo(transactionData));
+        this.consensusToDataMapping.put(localConsensusInstance, transactionData);
         // If startConsensus was already called for a given round
         if (existingConsensus != null) {
             LOGGER.log(Level.INFO, MessageFormat.format("{0} - Node already started consensus for instance {1}",
@@ -439,19 +439,51 @@ public class NodeService implements UDPService {
         this.rule1 = false;
         this.rule2 = false;
 
-        // Leader broadcasts PRE-PREPARE message
-        if (this.config.isLeader()) {
-            InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
-            this.link.broadcast(
-                    this.createConsensusMessage(clientData, localConsensusInstance, instance.getCurrentRound()));
-        } else {
+        // Return if not leader
+        if (!this.config.isLeader()) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Node is not leader, waiting for PRE-PREPARE message", config.getId()));
+            startTimer();
+            return;
         }
 
+        if (!authorizeClient(transactionData)) {
+            return;
+        }
+
+        InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
+        LOGGER.log(Level.INFO,
+                MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
+        this.link.broadcast(
+                this.createConsensusMessage(transactionData, localConsensusInstance, instance.getCurrentRound()));
         startTimer();
+
+    }
+
+    public boolean authorizeClient(ClientData transactionData) {
+        // Verify message signature, checks that source is the client
+        if (!verifyClientData(transactionData)) {
+            System.out.println("Message is not valid");
+            return false;
+        }
+
+        String transferContent = transactionData.getValue();
+        String amount = transferContent.split(" ")[0];
+        String destination = transferContent.split(" ")[1];
+        String source = transactionData.getClientID();
+
+        // Check if the client has enough balance to send the amount
+        if (clientBalances.getOrDefault(source, 0.0f) < Float.parseFloat(amount)) {
+            System.out.println("Client does not have enough balance to send the amount");
+            return false;
+        }
+        // Check that destination is a valid client, meaning is in the clientBalances
+        // ! NB we msut ensure all clients are added to the clientBalances
+        if (!clientBalances.containsKey(destination)) {
+            System.out.println("Destination is not a valid client");
+            return false;
+        }
+        return true;
     }
 
     /*
@@ -479,15 +511,14 @@ public class NodeService implements UDPService {
 
         ClientData clientData = prePrepareMessage.getClientData();
 
+        if (!authorizeClient(clientData)) {
+            return;
+        }
+
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
                         "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}",
                         config.getId(), senderId, consensusInstance, round));
-
-        if (!verifyClientData(clientData)) {
-            System.out.println("Message is not valid");
-            return;
-        }
 
         // Verify if pre-prepare was sent by leader
         if (!isLeader(senderId)) {
@@ -755,6 +786,19 @@ public class NodeService implements UDPService {
             ClientMessage confirmationMessage = new ClientMessage(config.getId(), Message.Type.CLIENT_CONFIRMATION);
             confirmationMessage.setClientData(clientData);
             link.send(clientData.getClientID(), confirmationMessage);
+            // ? could add message for receiver to notify that received money
+
+            // Update sender and receiver balances
+            String[] transferContent = commitedData.getValue().split(" ");
+            String amount = transferContent[0];
+            String destination = transferContent[1];
+
+            // Update sender balance
+            float senderBalance = clientBalances.getOrDefault(clientData.getClientID(), 0.0f);
+            clientBalances.put(clientData.getClientID(), senderBalance - Float.parseFloat(amount));
+            // Update receiver balance
+            float receiverBalance = clientBalances.getOrDefault(destination, 0.0f);
+            clientBalances.put(destination, receiverBalance + Float.parseFloat(amount));
         }
     }
 
@@ -768,7 +812,8 @@ public class NodeService implements UDPService {
             return false;
         }
 
-        try {
+        try { // Verifies that payload is same as signature. Fails if value wrong, or clientID
+              // wrong
             if (Authenticate.verifyMessage(config.getNodePubKey(clientData.getClientID()), value, signature)) {
                 return true;
             }
@@ -780,13 +825,14 @@ public class NodeService implements UDPService {
         return false;
     }
 
-    public void handleTransfer(ClientMessage message) {
-        ClientData clientData = message.getClientData();
-        if (!this.verifyClientData(clientData)) {
+    public void handleTransfer(ClientMessage transferMessage) {
+        ClientData transferData = transferMessage.getClientData();
+        if (!this.verifyClientData(transferData)) {
             return;
         }
-        clientRequestQueue.offer(clientData); // ? Should this be on both the transfer and balance request?
-        // Add handling
+        clientRequestQueue.offer(transferData);
+
+        startConsensus(transferData);
     }
 
     public void handleBalanceRequest(ClientMessage message) {
