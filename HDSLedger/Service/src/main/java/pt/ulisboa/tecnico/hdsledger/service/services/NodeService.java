@@ -69,9 +69,9 @@ public class NodeService implements UDPService {
     // Consensus instance information per consensus instance
     private final Map<Integer, InstanceInfo> instanceInfo = new ConcurrentHashMap<>();
     // Current consensus instance
-    private final AtomicInteger consensusInstance = new AtomicInteger(0);
+    private final AtomicInteger consensusInstance = new AtomicInteger(1); // ! Changed to initialize at 1
     // Last decided consensus instance
-    private final AtomicInteger lastDecidedConsensusInstance = new AtomicInteger(0);
+    private final AtomicInteger lastDecidedConsensusInstance = new AtomicInteger(1);
 
     // Ledger (for now, just a list of strings)
     private ArrayList<String> ledger = new ArrayList<String>();
@@ -614,8 +614,7 @@ public class NodeService implements UDPService {
             // Must reply to prepare message senders
             Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(consensusInstance, round)
                     .values();
-
-            CommitMessage c = new CommitMessage(preparedData);
+            CommitMessage c = new CommitMessage(clientData);
             instance.setCommitMessage(c);
 
             sendersMessage.forEach(senderMessage -> {
@@ -648,11 +647,14 @@ public class NodeService implements UDPService {
         int consensusInstance = message.getConsensusInstance();
         int round = message.getRound();
 
+        CommitMessage commitMessage = message.deserializeCommitMessage();
+        ClientData clientData = commitMessage.getClientData();
+
         LOGGER.log(Level.INFO,
                 MessageFormat.format("{0} - Received COMMIT message from {1}: Consensus Instance {2}, Round {3}",
                         config.getId(), message.getSenderId(), consensusInstance, round));
 
-        if (!verifyClientData(message.deserializeCommitMessage().getData())) {
+        if (!verifyClientData(message.deserializeCommitMessage().getClientData())) {
             System.out.println("Message is not valid");
             return;
         }
@@ -662,6 +664,7 @@ public class NodeService implements UDPService {
         instance = this.instanceInfo.get(consensusInstance);
 
         if (instance == null) {
+
             // Should never happen because only receives commit as a response to a prepare
             // message
             MessageFormat.format(
@@ -673,6 +676,7 @@ public class NodeService implements UDPService {
         // Within an instance of the algorithm, each upon rule is triggered at most once
         // for any round r
         if (instance.getCommittedRound() >= round) {
+
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                             "{0} - Already received COMMIT message for Consensus Instance {1}, Round {2}, ignoring",
@@ -687,7 +691,8 @@ public class NodeService implements UDPService {
             System.out.println("Value to commit: " + commitValue.get());
             Optional<ConsensusMessage> prepMessage = this.commitMessages.getMessages(consensusInstance, round).values()
                     .stream()
-                    .filter(entry -> entry.deserializeCommitMessage().getData().getValue().equals(commitValue.get()))
+                    .filter(entry -> entry.deserializeCommitMessage().getClientData().getValue()
+                            .equals(commitValue.get()))
                     .findAny();
 
             if (!prepMessage.isPresent()) {
@@ -695,14 +700,10 @@ public class NodeService implements UDPService {
                 return;
             }
 
-            ClientData commitedData = prepMessage.get().deserializeCommitMessage().getData();
-
+            ClientData commitedData = prepMessage.get().deserializeCommitMessage().getClientData();
             cancelTimer();
-
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
-
-            ClientData clientData = this.consensusToDataMapping.get(consensusInstance);
 
             // Check if this client request is up next
             while (!clientRequestQueue.isEmpty()) {
@@ -760,6 +761,13 @@ public class NodeService implements UDPService {
     public boolean verifyClientData(ClientData clientData) {
         byte[] signature = clientData.getSignature();
         String value = clientData.getValue();
+
+        // Check if the signature is null and immediately return false if so
+        if (signature == null) {
+            System.out.println("Message has no signature and will be ignored.");
+            return false;
+        }
+
         try {
             if (Authenticate.verifyMessage(config.getNodePubKey(clientData.getClientID()), value, signature)) {
                 return true;

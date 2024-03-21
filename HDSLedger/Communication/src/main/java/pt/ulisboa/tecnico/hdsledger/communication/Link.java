@@ -352,4 +352,14 @@ public class Link {
 
         return message;
     }
+
+    private volatile boolean running = true;
+
+    // Add shutdown method to allow for cleanup after tests
+    public void shutdown() {
+        running = false;
+        if (socket != null && !socket.isClosed()) {
+            socket.close();
+        }
+    }
 }

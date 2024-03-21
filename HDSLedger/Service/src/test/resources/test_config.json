@@ -1,18 +1,48 @@
 [
     {
-        "id": "leader",
+        "id": "1",
         "isLeader": true,
+        "hostname": "localhost",
+        "port": 3101
+    },
+    {
+        "id": "2",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3102
+    },
+    {
+        "id": "3",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3103
+    },
+    {
+        "id": "4",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3104
+    },
+    {
+        "id": "5",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3105
+    },
+    {
+        "id": "6",
+        "isLeader": false,
         "hostname": "localhost",
         "port": 3106
     },
     {
-        "id": "node",
+        "id": "7",
         "isLeader": false,
         "hostname": "localhost",
         "port": 3107
     },
     {
-        "id": "byzantineNode",
+        "id": "8",
         "isLeader": false,
         "hostname": "localhost",
         "port": 3108

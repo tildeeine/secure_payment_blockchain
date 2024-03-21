@@ -5,14 +5,14 @@ import com.google.gson.Gson;
 public class CommitMessage {
 
     // Value
-    private ClientData value;
+    private ClientData clientData;
 
-    public CommitMessage(ClientData value) {
-        this.value = value;
+    public CommitMessage(ClientData clientData) {
+        this.clientData = clientData;
     }
 
-    public ClientData getData() {
-        return value;
+    public ClientData getClientData() {
+        return clientData;
     }
 
     public String toJson() {
