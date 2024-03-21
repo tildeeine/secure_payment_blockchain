@@ -1,4 +1,4 @@
-package pt.ulisboa.tecnico.hdsledges.service.services;
+package pt.ulisboa.tecnico.hdsledger.service.services;
 
 import org.mockito.Mock;
 import org.junit.jupiter.api.Test;

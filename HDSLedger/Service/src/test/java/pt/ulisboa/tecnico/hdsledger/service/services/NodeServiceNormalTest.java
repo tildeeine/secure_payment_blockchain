@@ -14,7 +14,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.times;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Mockito;
-import static org.mockito.ArgumentMatchers.argThat;
+
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.*;
@@ -40,6 +40,7 @@ import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.PrePrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.RoundChangeMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.Authenticate;
 
@@ -133,11 +134,11 @@ class NodeServiceNormalTest {
                 nodeConfigs);
     }
 
-    public ClientData setupClientData() {
+    public ClientData setupClientData(String value) {
         // Set up client data
         ClientData clientData = new ClientData();
         clientData.setRequestID(1); // arbitrary number
-        clientData.setValue("Value");
+        clientData.setValue(value);
         clientData.setClientID("client1");
 
         try {
@@ -153,6 +154,7 @@ class NodeServiceNormalTest {
     // Desired result: Next leader is r mod N -> r = current leader + 1 (node)
     @Test
     void testUpdateLeader() {
+        System.out.println("Update leader on round change...");
         // Test setup: Ensure an InstanceInfo exists for the current consensus instance
         int initialConsensusInstance = nodeService.getConsensusInstance().get();
 
@@ -179,6 +181,7 @@ class NodeServiceNormalTest {
     // messages
     @Test
     void testCommitOnValidQuorum() {
+        System.out.println("COmmit on valid quorum...");
         // Test setup
         // Make enough prepare messages to reach quorum (2f+1)
         // Get number of nodes and calculate quorum
@@ -187,13 +190,15 @@ class NodeServiceNormalTest {
         int quorum = 3 * f + 1;
 
         // Set up client data
-        ClientData clientData = setupClientData();
+        ClientData clientData = setupClientData("value");
 
         // Set values for the prepare message
         int consensusInstance = nodeService.getConsensusInstance().get();
         int round = 1;
         PrepareMessage prepareMessage = new PrepareMessage(clientData);
         String senderMessageId = "1";
+
+        nodeService.startConsensus(clientData);
 
         // Make and send enough prepare messages to reach quorum (2f+1)
         for (int i = 0; i < quorum; i++) {
@@ -217,18 +222,20 @@ class NodeServiceNormalTest {
     // messages
     @Test
     void testNoCommitOnInvalidQuorum() {
+        System.out.println("Don't commit on invalid quorum");
         // Assuming f byzantine nodes colluding to send prepare messages with same value
         int f = (nodeConfigs.length - 1) / 3;
 
         // Set up client data
-        ClientData clientData = setupClientData();
-        clientData.setValue("ByzantineValue");
+        ClientData clientData = setupClientData("ByzantineValue");
 
         // Set values for the prepare message
         int consensusInstance = nodeService.getConsensusInstance().get();
         int round = 1;
         PrepareMessage prepareMessage = new PrepareMessage(clientData);
         String senderMessageId = "1";
+
+        nodeService.startConsensus(clientData);
 
         // Make and send f prepare messages
         for (int i = 0; i < f; i++) {
@@ -250,6 +257,7 @@ class NodeServiceNormalTest {
     // Test that client data that is not signed is not accepted for quorum
     @Test
     void testRejectUnsignedClientData() {
+        System.out.println("Reject unsigned client data");
         // Set up client data
         ClientData clientData = new ClientData();
         clientData.setRequestID(1); // arbitrary number
@@ -262,6 +270,8 @@ class NodeServiceNormalTest {
         int round = 1;
         PrepareMessage prepareMessage = new PrepareMessage(clientData);
         int quorum = 3 * ((nodeConfigs.length - 1) / 3) + 1;
+
+        nodeService.startConsensus(clientData);
 
         for (int i = 0; i < quorum; i++) {
             // Create prepare message
@@ -282,12 +292,12 @@ class NodeServiceNormalTest {
     // Test that commit messages that have quorum add value to ledger
     @Test
     void testCommitAddsValueToLedger() {
+        System.out.println("Commit adds value to ledger...");
         // Get ledger length before commit
         int ledgerLengthBefore = nodeService.getLedger().size();
 
         // Set up client data
-        ClientData clientData = setupClientData();
-        clientData.setValue("NewCommit");
+        ClientData clientData = setupClientData("NewCommit");
 
         // Test setup: Ensure an InstanceInfo exists for the current consensus instance
         int initialConsensusInstance = nodeService.getConsensusInstance().get();
@@ -300,15 +310,16 @@ class NodeServiceNormalTest {
         int consensusInstance = nodeService.getConsensusInstance().get();
         System.out.println("Consensus instance: " + consensusInstance); // !
         int round = 1;
-        PrepareMessage prepareMessage = new PrepareMessage(clientData);
-        int quorum = 3 * ((nodeConfigs.length - 1) / 3) + 1;
-
+        CommitMessage commitMessage = new CommitMessage(clientData);
+        int f = Math.floorDiv(nodeConfigs.length - 1, 3);
+        int quorum = Math.floorDiv(nodeConfigs.length + f, 2) + 1;
+ 
         for (int i = 0; i < quorum; i++) {
             // Create prepare message
             ConsensusMessage consensusMessage = new ConsensusMessageBuilder(String.valueOf(i + 1), Message.Type.COMMIT)
                     .setConsensusInstance(consensusInstance)
                     .setRound(round)
-                    .setMessage(prepareMessage.toJson())
+                    .setMessage(commitMessage.toJson())
                     .build();
 
             nodeService.uponCommit(consensusMessage);
