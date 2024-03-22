@@ -194,12 +194,19 @@ public class ClientService implements UDPServiceClient {
                                     handleConfirmationMessage(confirmationMessage);
                                 }
 
-                                case BALANCE -> {
+                                case BALANCE_RESPONSE -> {
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received BALANCE response from {1}",
                                                     config.getId(), message.getSenderId()));
-
-                                    handleBalanceResponse((BalanceMessage) message);
+                                    // Verify that message is instance of BalanceMessage
+                                    if (!(message instanceof BalanceMessage)) { // ! this is called, response is invalid
+                                        LOGGER.log(Level.INFO,
+                                                MessageFormat.format("{0} - Received invalid balance response from {1}",
+                                                        config.getId(), message.getSenderId()));
+                                        return;
+                                    }
+                                    BalanceMessage balanceMessage = (BalanceMessage) message;
+                                    handleBalanceResponse(balanceMessage);
                                 }
 
                                 default ->

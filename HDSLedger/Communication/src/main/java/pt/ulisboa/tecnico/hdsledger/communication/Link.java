@@ -122,8 +122,6 @@ public class Link {
                 int messageId = data.getMessageId();
                 int sleepTime = BASE_SLEEP_TIME;
 
-                System.out.println("Sending message" + data.getType() + " to " + nodeId); // !
-
                 // Send message to local queue instead of using network if destination in self
                 if (nodeId.equals(this.config.getId())) {
                     this.localhostQueue.add(data);
@@ -139,7 +137,7 @@ public class Link {
                     LOGGER.log(Level.INFO, MessageFormat.format(
                             "{0} - Sending {1} message to {2}:{3} with message ID {4} - Attempt #{5}", config.getId(),
                             data.getType(), destAddress, destPort, messageId, count++));
-                    authenticatedSend(destAddress, destPort, data); // ! Issue somewhere here
+                    authenticatedSend(destAddress, destPort, data);
 
                     // Wait (using exponential back-off), then look for ACK
                     Thread.sleep(sleepTime);
@@ -236,7 +234,7 @@ public class Link {
     /*
      * Receives a message from any node in the network (blocking)
      */
-    public Message receive() throws IOException, ClassNotFoundException {
+    public Message receive() throws IOException, ClassNotFoundException { // ! issue happens here somewhere i think
         Message message = null;
         String serialized = "";
         Boolean local = false;
@@ -272,8 +270,10 @@ public class Link {
         String senderId = message.getSenderId();
         int messageId = message.getMessageId();
 
-        if (!nodes.containsKey(senderId) && !senderId.contains("client"))
+        if (!nodes.containsKey(senderId) && !senderId.contains("client")) {
+            System.out.println("ID issue");
             throw new HDSSException(ErrorMessage.NoSuchNode);
+        }
 
         // Handle ACKS, since it's possible to receive multiple acks from the same
 
@@ -285,17 +285,18 @@ public class Link {
 
         // Deserialize for the correct type
         if (!local)
-            if (message.getType().equals(Message.Type.ROUND_CHANGE)) {
-                message = new Gson().fromJson(serialized, RoundChangeMessage.class);
-            } else if (message.getType().equals(Message.Type.TRANSFER)
-                    || message.getType().equals(Message.Type.CLIENT_CONFIRMATION)
-                    || message.getType().equals(Message.Type.BALANCE)) {
-                message = new Gson().fromJson(serialized, ClientMessage.class);
-            }
+            System.out.println("Might have isues here");
+        if (message.getType().equals(Message.Type.ROUND_CHANGE)) {
+            message = new Gson().fromJson(serialized, RoundChangeMessage.class);
+        } else if (message.getType().equals(Message.Type.TRANSFER)
+                || message.getType().equals(Message.Type.CLIENT_CONFIRMATION)
+                || message.getType().equals(Message.Type.BALANCE)) {
+            message = new Gson().fromJson(serialized, ClientMessage.class);
+        }
 
-            else {
-                message = new Gson().fromJson(serialized, this.messageClass);
-            }
+        else {
+            message = new Gson().fromJson(serialized, this.messageClass);
+        }
 
         boolean isRepeated = !receivedMessages.get(message.getSenderId()).add(messageId);
         Type originalType = message.getType();

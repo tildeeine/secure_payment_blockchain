@@ -857,7 +857,8 @@ public class NodeService implements UDPService {
 
         // Send the balance back to the client
         BalanceMessage balanceMessage = new BalanceMessage(balance, clientData.getRequestID(),
-                clientData.getClientID(), config.getId(), Message.Type.BALANCE);
+                clientData.getClientID(), config.getId(), Message.Type.BALANCE_RESPONSE);
+
         link.send(clientData.getClientID(), balanceMessage); // ! gets to here
     }
 
