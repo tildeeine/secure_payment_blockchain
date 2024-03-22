@@ -99,7 +99,6 @@ public class Client {
                         clientService.clientTransfer(transferMessage);
                         break;
                     case "balance":
-                        System.out.println("Your current balance:   " + wallet.getBalance());
                         ClientMessage selfBalanceRequest = clientMessageBuilder.buildMessage(wallet.getId(),
                                 clientConfig.getId(), Message.Type.BALANCE); // payload = dest public key
                         clientService.checkBalance(selfBalanceRequest);

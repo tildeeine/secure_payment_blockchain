@@ -26,6 +26,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
 import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.BalanceMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.PrePrepareMessage;
@@ -853,8 +854,10 @@ public class NodeService implements UDPService {
         String balanceUser = clientData.getValue();
         float balance = clientBalances.getOrDefault(balanceUser, 0.0f);
 
-        // Send the balance back to the client //! Need to send the actual balance
-
+        // Send the balance back to the client
+        BalanceMessage balanceMessage = new BalanceMessage(balance, clientData.getRequestID(),
+                clientData.getClientID(), config.getId(), Message.Type.BALANCE);
+        link.send(clientData.getClientID(), balanceMessage); // ! gets to here
     }
 
     @Override

@@ -12,6 +12,7 @@ import java.util.HashMap;
 
 import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
 import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.BalanceMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
@@ -68,18 +69,16 @@ public class ClientService implements UDPServiceClient {
     public void checkBalance(ClientMessage balanceRequest) {
         // Create message with balance request
         String userKey = balanceRequest.getClientData().getValue();
-        this.balanceTracker.put(balanceRequest.getClientData().getRequestID(), new ConcurrentHashMap<>()); // !Make sure
-                                                                                                           // request ID
-                                                                                                           // is used in
-                                                                                                           // response
+        this.balanceTracker.put(balanceRequest.getClientData().getRequestID(), new ConcurrentHashMap<>());
         link.broadcast(balanceRequest);
     }
 
-    public void handleBalanceResponse(ClientMessage balanceResponse) {
+    public void handleBalanceResponse(BalanceMessage balanceResponse) {
         // Check if the balance response is for this client
-        ClientData clientData = balanceResponse.getClientData();
-        String clientID = clientData.getClientID();
-        int requestID = clientData.getRequestID();
+        System.out.println("Handling balance response"); // ! debugging
+        float balance = balanceResponse.getBalance();
+        String clientID = balanceResponse.getClientID();
+        int requestID = balanceResponse.getRequestID();
 
         if (!clientID.equals(this.config.getId())) {
             return;
@@ -89,7 +88,6 @@ public class ClientService implements UDPServiceClient {
             return;
         }
         Map<Float, Integer> balances = balanceTracker.get(requestID);
-        float balance = Float.parseFloat(clientData.getValue());
 
         // Get count, increment, and replace
         int newCount = balances.getOrDefault(balance, 0) + 1;
@@ -194,10 +192,10 @@ public class ClientService implements UDPServiceClient {
 
                                 case BALANCE -> {
                                     LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Received BALANCE message from {1}",
+                                            MessageFormat.format("{0} - Received BALANCE response from {1}",
                                                     config.getId(), message.getSenderId()));
 
-                                    handleBalanceResponse((ClientMessage) message);
+                                    handleBalanceResponse((BalanceMessage) message);
                                 }
 
                                 default ->

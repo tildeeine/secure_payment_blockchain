@@ -137,8 +137,9 @@ public class Link {
                     LOGGER.log(Level.INFO, MessageFormat.format(
                             "{0} - Sending {1} message to {2}:{3} with message ID {4} - Attempt #{5}", config.getId(),
                             data.getType(), destAddress, destPort, messageId, count++));
-
+                    System.out.println("Before authenticatedSend");
                     authenticatedSend(destAddress, destPort, data);
+                    System.out.println("After authenticatedSend");
 
                     // Wait (using exponential back-off), then look for ACK
                     Thread.sleep(sleepTime);
@@ -300,7 +301,7 @@ public class Link {
         Type originalType = message.getType();
         // Message already received (add returns false if already exists) => Discard
         if (isRepeated) {
-            message.setType(Message.Type.IGNORE);
+            message.setType(Message.Type.IGNORE); // ! this is called for host 1
         }
 
         switch (message.getType()) {
