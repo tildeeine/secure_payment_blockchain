@@ -9,6 +9,7 @@ public class BalanceMessage extends Message {
     private float balance;
     private int requestID;
     private String clientID;
+    private String requestedClient;
 
     public BalanceMessage(float balance, int requestID, String clientID, String senderID, Type type) {
         super(senderID, type);
@@ -31,6 +32,14 @@ public class BalanceMessage extends Message {
 
     public String toJson() {
         return new Gson().toJson(this);
+    }
+
+    public String getRequestedClient() {
+        return requestedClient;
+    }
+
+    public void setRequestedClient(String requestedClient) {
+        this.requestedClient = requestedClient;
     }
 
 }

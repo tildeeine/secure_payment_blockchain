@@ -55,11 +55,6 @@ public class ClientService implements UDPServiceClient {
         this.wallet = wallet;
     }
 
-    public void sendClientMessage(ClientMessage clientMessage) { // ! legacy from part1
-        this.requestTracker.put(clientMessage.getClientData().getRequestID(), 0);
-        link.broadcast(clientMessage);
-    }
-
     public void clientTransfer(ClientMessage transferMessage) {
         // Create a message
         this.requestTracker.put(transferMessage.getClientData().getRequestID(), 0);
@@ -68,6 +63,7 @@ public class ClientService implements UDPServiceClient {
 
     public void checkBalance(ClientMessage balanceRequest) {
         // Create message with balance request
+        System.out.println("request id" + balanceRequest.getClientData().getRequestID());// !
         String userKey = balanceRequest.getClientData().getValue();
         this.balanceTracker.put(balanceRequest.getClientData().getRequestID(), new ConcurrentHashMap<>());
         link.broadcast(balanceRequest);
@@ -75,18 +71,16 @@ public class ClientService implements UDPServiceClient {
 
     public void handleBalanceResponse(BalanceMessage balanceResponse) {
         // Check if the balance response is for this client
-        System.out.println("Handling balance response"); // ! debugging
         float balance = balanceResponse.getBalance();
         String clientID = balanceResponse.getClientID();
         int requestID = balanceResponse.getRequestID();
+        String requestedClient = balanceResponse.getRequestedClient();
 
         if (!clientID.equals(this.config.getId())) {
-            System.out.println("Not for me");// !
             return;
         }
         // Update the balance
         if (!balanceTracker.containsKey(requestID)) {
-            System.out.println("Request ID not found in balance tracker");// !
             return;
         }
         Map<Float, Integer> balances = balanceTracker.get(requestID);
@@ -98,11 +92,14 @@ public class ClientService implements UDPServiceClient {
 
         // Check if we have quorum for value
         if (newCount == 2 * this.allowedFaults + 1) { // 2f+1
-            System.out.println("Quorum reached");// !
             LOGGER.log(Level.INFO, MessageFormat.format(
                     "{0} - Recieved {1} valid confirmations on balance check, balance verified.",
                     config.getId(), newCount, balanceResponse.getMessageId()));
-            System.out.println("Your balance is: " + balance);
+            if (requestedClient.equals(this.config.getId())) {
+                System.out.println("Your balance is: " + balance);
+            } else {
+                System.out.println("Client " + requestedClient + " balance is: " + balance);
+            }
             balanceTracker.remove(requestID); // To not process redundant value responses
         }
     }
