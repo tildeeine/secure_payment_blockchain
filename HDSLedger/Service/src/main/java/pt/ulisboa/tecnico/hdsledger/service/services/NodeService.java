@@ -844,6 +844,7 @@ public class NodeService implements UDPService {
     }
 
     public void handleBalanceRequest(ClientMessage message) {
+        System.out.println("Handling balance request");
         ClientData clientData = message.getClientData();
         if (!this.verifyClientData(clientData)) {
             return;

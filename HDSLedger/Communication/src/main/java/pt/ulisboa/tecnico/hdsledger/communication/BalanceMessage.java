@@ -9,7 +9,6 @@ public class BalanceMessage extends Message {
     private float balance;
     private int requestID;
     private String clientID;
-    private Message.Type type;
 
     public BalanceMessage(float balance, int requestID, String clientID, String senderID, Type type) {
         super(senderID, type);

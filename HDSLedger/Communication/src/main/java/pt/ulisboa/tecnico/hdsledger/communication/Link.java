@@ -122,6 +122,8 @@ public class Link {
                 int messageId = data.getMessageId();
                 int sleepTime = BASE_SLEEP_TIME;
 
+                System.out.println("Sending message" + data.getType() + " to " + nodeId); // !
+
                 // Send message to local queue instead of using network if destination in self
                 if (nodeId.equals(this.config.getId())) {
                     this.localhostQueue.add(data);
@@ -137,15 +139,13 @@ public class Link {
                     LOGGER.log(Level.INFO, MessageFormat.format(
                             "{0} - Sending {1} message to {2}:{3} with message ID {4} - Attempt #{5}", config.getId(),
                             data.getType(), destAddress, destPort, messageId, count++));
-                    System.out.println("Before authenticatedSend");
-                    authenticatedSend(destAddress, destPort, data);
-                    System.out.println("After authenticatedSend");
+                    authenticatedSend(destAddress, destPort, data); // ! Issue somewhere here
 
                     // Wait (using exponential back-off), then look for ACK
                     Thread.sleep(sleepTime);
 
                     // Receive method will set receivedAcks when sees corresponding ACK
-                    if (receivedAcks.contains(messageId))
+                    if (receivedAcks.contains(messageId)) // ! Is not necessarily the correct ACK, doesn't check type
                         break;
 
                     sleepTime <<= 1;
@@ -301,7 +301,7 @@ public class Link {
         Type originalType = message.getType();
         // Message already received (add returns false if already exists) => Discard
         if (isRepeated) {
-            message.setType(Message.Type.IGNORE); // ! this is called for host 1
+            message.setType(Message.Type.IGNORE);
         }
 
         switch (message.getType()) {
@@ -336,7 +336,8 @@ public class Link {
 
         // Send ack
         if (!local) {
-            InetAddress address = InetAddress.getByName(response.getAddress().getHostAddress());
+            InetAddress address = InetAddress.getByName(config.getHostname()); // ! gave wrong address, changed for
+                                                                               // simplicity
             int port = response.getPort();
 
             Message responseMessage = new Message(this.config.getId(), Message.Type.ACK);

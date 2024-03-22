@@ -81,10 +81,12 @@ public class ClientService implements UDPServiceClient {
         int requestID = balanceResponse.getRequestID();
 
         if (!clientID.equals(this.config.getId())) {
+            System.out.println("Not for me");// !
             return;
         }
         // Update the balance
         if (!balanceTracker.containsKey(requestID)) {
+            System.out.println("Request ID not found in balance tracker");// !
             return;
         }
         Map<Float, Integer> balances = balanceTracker.get(requestID);
@@ -92,9 +94,11 @@ public class ClientService implements UDPServiceClient {
         // Get count, increment, and replace
         int newCount = balances.getOrDefault(balance, 0) + 1;
         balances.put(balance, newCount);
+        System.out.println("Checking for quorum");// !
 
         // Check if we have quorum for value
         if (newCount == 2 * this.allowedFaults + 1) { // 2f+1
+            System.out.println("Quorum reached");// !
             LOGGER.log(Level.INFO, MessageFormat.format(
                     "{0} - Recieved {1} valid confirmations on balance check, balance verified.",
                     config.getId(), newCount, balanceResponse.getMessageId()));

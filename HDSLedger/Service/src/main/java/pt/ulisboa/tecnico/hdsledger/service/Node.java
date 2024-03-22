@@ -69,11 +69,6 @@ public class Node {
         nodesConfigPath += args[1];
 
         Node node = new Node(id, nodesConfigPath, clientsConfigPath);
-        node.start();
-    }
-
-    public void start() {
-        nodeService.listen();
     }
 
     public void sendTestMessage(String recipientId, Message message) {
