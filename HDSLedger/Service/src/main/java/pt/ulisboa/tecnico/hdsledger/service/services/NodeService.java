@@ -829,7 +829,7 @@ public class NodeService implements UDPService {
             e.printStackTrace();
             return false;
         }
-        System.out.println("Value does not match signature");
+        System.out.println("Value does not match signature");// ! transfer goes here
         return false;
     }
 
@@ -859,7 +859,7 @@ public class NodeService implements UDPService {
         BalanceMessage balanceMessage = new BalanceMessage(balance, clientData.getRequestID(),
                 clientData.getClientID(), config.getId(), Message.Type.BALANCE_RESPONSE);
 
-        link.send(clientData.getClientID(), balanceMessage); // ! gets to here
+        link.send(clientData.getClientID(), balanceMessage);
     }
 
     @Override

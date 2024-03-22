@@ -234,7 +234,7 @@ public class Link {
     /*
      * Receives a message from any node in the network (blocking)
      */
-    public Message receive() throws IOException, ClassNotFoundException { // ! issue happens here somewhere i think
+    public Message receive() throws IOException, ClassNotFoundException {
         Message message = null;
         String serialized = "";
         Boolean local = false;
@@ -283,26 +283,26 @@ public class Link {
             return message;
         }
 
-        // Deserialize for the correct type
-        if (!local)
-            System.out.println("Might have isues here");
-        if (message.getType().equals(Message.Type.ROUND_CHANGE)) {
-            message = new Gson().fromJson(serialized, RoundChangeMessage.class);
-        } else if (message.getType().equals(Message.Type.TRANSFER)
-                || message.getType().equals(Message.Type.CLIENT_CONFIRMATION)
-                || message.getType().equals(Message.Type.BALANCE)) {
-            message = new Gson().fromJson(serialized, ClientMessage.class);
-        }
-
-        else {
-            message = new Gson().fromJson(serialized, this.messageClass);
-        }
-
         boolean isRepeated = !receivedMessages.get(message.getSenderId()).add(messageId);
         Type originalType = message.getType();
         // Message already received (add returns false if already exists) => Discard
         if (isRepeated) {
             message.setType(Message.Type.IGNORE);
+        }
+
+        // Deserialize for the correct type
+        if (!local) {
+            if (message.getType().equals(Message.Type.ROUND_CHANGE)) {
+                message = new Gson().fromJson(serialized, RoundChangeMessage.class);
+            } else if (message.getType().equals(Message.Type.TRANSFER)
+                    || message.getType().equals(Message.Type.CLIENT_CONFIRMATION)
+                    || message.getType().equals(Message.Type.BALANCE)) {
+                message = new Gson().fromJson(serialized, ClientMessage.class);
+            } else if (message.getType().equals(Message.Type.BALANCE_RESPONSE)) {
+                message = new Gson().fromJson(serialized, BalanceMessage.class);
+            } else {
+                message = new Gson().fromJson(serialized, this.messageClass);
+            }
         }
 
         switch (message.getType()) {
