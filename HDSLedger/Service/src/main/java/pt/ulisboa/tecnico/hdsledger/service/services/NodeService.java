@@ -118,7 +118,7 @@ public class NodeService implements UDPService {
         for (ProcessConfig clientConfig : clientConfigs) {
             clientBalances.put(clientConfig.getId(), clientConfig.getStartBalance());
         }
-        System.out.println("Starting balances: " + clientBalances); // !debugging
+        System.out.println("Starting balances: " + clientBalances); // Print at start for demo simplicity
     }
 
     public void sendClientMessage(Message message) {
@@ -486,7 +486,6 @@ public class NodeService implements UDPService {
             return false;
         }
         // Check that destination is a valid client, meaning is in the clientBalances
-        // ! NB we msut ensure all clients are added to the clientBalances
         if (!clientBalances.containsKey(destination)) {
             System.out.println("Destination is not a valid client");
             return false;
@@ -746,6 +745,7 @@ public class NodeService implements UDPService {
 
             // Check if this client request is up next
             while (!clientRequestQueue.isEmpty()) {
+                System.out.println("Checking if client request is up next");// !
                 // Peek at the next client request without removing it from the queue
                 ClientData nextClientRequest = clientRequestQueue.peek();
 
@@ -767,7 +767,6 @@ public class NodeService implements UDPService {
 
             // Append value to the ledger (must be synchronized to be thread-safe)
             synchronized (ledger) {
-
                 String value = commitedData.getValue();
 
                 // Increment size of ledger to accommodate current instance
@@ -794,7 +793,8 @@ public class NodeService implements UDPService {
             ClientMessage confirmationMessage = new ClientMessage(config.getId(), Message.Type.CLIENT_CONFIRMATION);
             confirmationMessage.setClientData(clientData);
             link.send(clientData.getClientID(), confirmationMessage);
-            // ? could add message for receiver to notify that received money
+            // TODO could add message for receiver to notify that received money. Would need
+            // to get quorum for this.
 
             // Update sender and receiver balances
             String[] transferContent = commitedData.getValue().split(" ");
@@ -813,7 +813,6 @@ public class NodeService implements UDPService {
     public boolean verifyClientData(ClientData clientData) {
         byte[] signature = clientData.getSignature();
         String value = clientData.getValue();
-        System.out.println("ClientID: " + clientData.getClientID()); // !debugging
 
         // Check if the signature is null and immediately return false if so
         if (signature == null) {
@@ -830,7 +829,7 @@ public class NodeService implements UDPService {
             e.printStackTrace();
             return false;
         }
-        System.out.println("Value does not match signature");// ! transfer goes here
+        System.out.println("Value does not match signature");
         return false;
     }
 
