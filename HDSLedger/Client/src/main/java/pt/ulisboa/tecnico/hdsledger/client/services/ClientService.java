@@ -88,7 +88,6 @@ public class ClientService implements UDPServiceClient {
         // Get count, increment, and replace
         int newCount = balances.getOrDefault(balance, 0) + 1;
         balances.put(balance, newCount);
-        System.out.println("Checking for quorum");// !
 
         // Check if we have quorum for value
         if (newCount == 2 * this.allowedFaults + 1) { // 2f+1

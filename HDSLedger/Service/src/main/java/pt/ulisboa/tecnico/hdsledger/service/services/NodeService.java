@@ -421,12 +421,12 @@ public class NodeService implements UDPService {
      *
      * @param inputValue Value to value agreed upon
      */
-    public void startConsensus(ClientData transactionData) {
+    public void startConsensus(ClientData transferData) {
         // Set initial consensus values
         int localConsensusInstance = getConsensusInstance().incrementAndGet();
         InstanceInfo existingConsensus = this.instanceInfo.put(localConsensusInstance,
-                new InstanceInfo(transactionData));
-        this.consensusToDataMapping.put(localConsensusInstance, transactionData);
+                new InstanceInfo(transferData));
+        this.consensusToDataMapping.put(localConsensusInstance, transferData);
         // If startConsensus was already called for a given round
         if (existingConsensus != null) {
             LOGGER.log(Level.INFO, MessageFormat.format("{0} - Node already started consensus for instance {1}",
@@ -455,7 +455,7 @@ public class NodeService implements UDPService {
             return;
         }
 
-        if (!authorizeClient(transactionData)) {
+        if (!authorizeClient(transferData)) {
             return;
         }
 
@@ -463,7 +463,7 @@ public class NodeService implements UDPService {
         LOGGER.log(Level.INFO,
                 MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
         this.link.broadcast(
-                this.createConsensusMessage(transactionData, localConsensusInstance, instance.getCurrentRound()));
+                this.createConsensusMessage(transferData, localConsensusInstance, instance.getCurrentRound()));
         startTimer();
 
     }
@@ -813,6 +813,7 @@ public class NodeService implements UDPService {
     public boolean verifyClientData(ClientData clientData) {
         byte[] signature = clientData.getSignature();
         String value = clientData.getValue();
+        System.out.println("ClientID: " + clientData.getClientID()); // !debugging
 
         // Check if the signature is null and immediately return false if so
         if (signature == null) {

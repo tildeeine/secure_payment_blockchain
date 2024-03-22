@@ -35,7 +35,7 @@ public class ClientMessageBuilder {
             System.out.println("Error signing value");
         }
 
-        clientData.setValue(payload.split(" ")[0]);
+        clientData.setValue(payload);
         clientMessage.setClientData(clientData);
 
         return clientMessage;
