@@ -18,6 +18,9 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -27,6 +30,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
 import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.BalanceMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.PrePrepareMessage;
@@ -35,7 +39,6 @@ import pt.ulisboa.tecnico.hdsledger.communication.RoundChangeMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.service.blockchain.Block;
 import pt.ulisboa.tecnico.hdsledger.service.blockchain.Blockchain;
-import pt.ulisboa.tecnico.hdsledger.service.blockchain.Transaction;
 import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.service.models.MessageBucket;
 import pt.ulisboa.tecnico.hdsledger.utilities.Authenticate;
@@ -73,21 +76,18 @@ public class NodeService implements UDPService {
     // Consensus instance information per consensus instance
     private final Map<Integer, InstanceInfo> instanceInfo = new ConcurrentHashMap<>();
     // Current consensus instance
-    private final AtomicInteger consensusInstance = new AtomicInteger(0);
+    private final AtomicInteger consensusInstance = new AtomicInteger(1);
     // Last decided consensus instance
-    private final AtomicInteger lastDecidedConsensusInstance = new AtomicInteger(0);
+    private final AtomicInteger lastDecidedConsensusInstance = new AtomicInteger(1);
 
     // Ledger (for now, just a list of strings)
     private ArrayList<String> ledger = new ArrayList<String>();
-
-    // Client requests
+    // Current queue of client requests
     private Queue<ClientData> clientRequestQueue;
-
-    private Map<Integer, ClientData> consensusToDataMapping = new ConcurrentHashMap<>(); 
-
-    // private String clientRequestID;
-
-    // private String inputValue;
+    // Map of consensus instances to client data, used for consensus messages
+    private Map<Integer, Block> consensusToDataMapping = new ConcurrentHashMap<>();
+    // Map of clientID strings to client balances, used for balanceRequests
+    private Map<String, Float> clientBalances = new ConcurrentHashMap<>();
 
     // if the rules have been done already
     private boolean rule1 = false;
@@ -100,9 +100,11 @@ public class NodeService implements UDPService {
 
     private ConcurrentLinkedQueue<Block> waitingBlocks = new ConcurrentLinkedQueue<>();
 
-    private ConcurrentLinkedQueue<Transaction> transactionQueue = new ConcurrentLinkedQueue<>();
+    private ConcurrentLinkedQueue<ClientData> transactionQueue = new ConcurrentLinkedQueue<>();
 
     private Block block;
+
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig leaderConfig, ProcessConfig[] nodesConfig) {
@@ -124,11 +126,19 @@ public class NodeService implements UDPService {
         this.clientRequestQueue = new LinkedList<>();
 
         this.blockchain = new Blockchain();
-    }
 
+        this.startConsensusWithTimer();
+    }
 
     public void sendTestMessage(String nodeId, Message message) {
         link.send(nodeId, message);
+    }
+
+    public void initialiseClientBalances(ProcessConfig[] clientConfigs) {
+        for (ProcessConfig clientConfig : clientConfigs) {
+            clientBalances.put(clientConfig.getId(), clientConfig.getStartBalance());
+        }
+        System.out.println("Starting balances: " + clientBalances); // Print at start for demo simplicity
     }
 
     public void sendClientMessage(Message message) {
@@ -159,8 +169,8 @@ public class NodeService implements UDPService {
         return this.leaderConfig.getId().equals(id);
     }
 
-    public ConsensusMessage createConsensusMessage(ClientData clientData, int instance, int round) {
-        PrePrepareMessage prePrepareMessage = new PrePrepareMessage(clientData);
+    public ConsensusMessage createConsensusMessage(Block block, int instance, int round) {
+        PrePrepareMessage prePrepareMessage = new PrePrepareMessage(block);
 
         ConsensusMessage consensusMessage = new ConsensusMessageBuilder(config.getId(), Message.Type.PRE_PREPARE)
                 .setConsensusInstance(instance)
@@ -170,7 +180,6 @@ public class NodeService implements UDPService {
 
         return consensusMessage;
     }
-
 
     public void updateLeader() {
 
@@ -186,46 +195,47 @@ public class NodeService implements UDPService {
         }
     }
 
+// Not used?
+    // public ConsensusMessage getPrepareToSend(int round, String value) {
+    //     int localConsensusInstance = this.consensusInstance.get();
 
-    public ConsensusMessage getPrepareToSend(int round, String value) {
-        int localConsensusInstance = this.consensusInstance.get();
+    //     if (round != -1) {
+    //         for (ConsensusMessage consensusMessage : prepareMessages.getMessages(localConsensusInstance, round)
+    //                 .values()) {
+    //             PrepareMessage prepareMessage = consensusMessage.deserializePrepareMessage();
+    //             String messageValue = prepareMessage.getClientData().getValue();
+    //             if (value.equals(messageValue)) {
+    //                 return consensusMessage;
+    //             }
+    //         }
+    //     }
 
-        if (round != -1) {
-            for (ConsensusMessage consensusMessage : prepareMessages.getMessages(localConsensusInstance, round).values()) {
-                PrepareMessage prepareMessage = consensusMessage.deserializePrepareMessage();
-                String messageValue = prepareMessage.getClientData().getValue();
-                if (value.equals(messageValue)) {
-                    return consensusMessage;
-                } 
-            }
-        }
-
-        return null;
-    }
-
+    //     return null;
+    // }
 
     public void sendRoundChangeMessage(int round) {
         int localConsensusInstance = this.consensusInstance.get();
         InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
 
-        RoundChangeMessage message = new RoundChangeMessage(config.getId(), Message.Type.ROUND_CHANGE, localConsensusInstance, round,instance.getPreparedRound(), instance.getPreparedData());
-        
+        RoundChangeMessage message = new RoundChangeMessage(config.getId(), Message.Type.ROUND_CHANGE,
+                localConsensusInstance, round, instance.getPreparedRound(), instance.getpreparedBlock());
+
         Map<String, ConsensusMessage> prep = this.prepareMessages.getMessages(localConsensusInstance, round);
-        Collection <ConsensusMessage> prepareMessages;
+        Collection<ConsensusMessage> prepareMessages;
         if (prep == null)
             prepareMessages = null;
         else
             prepareMessages = prep.values();
 
         RoundChangeMessage highestPrepared = this.highestPrepared(roundChangeMessages, round);
-        
+
         if (highestPrepared != null && prepareMessages != null) {
             // Get prepare messages with the round and value that we will use
-            HashSet<ConsensusMessage> messagesToSend =
-                prepareMessages.stream().
-                filter(entry->entry.getRound() == highestPrepared.getPreparedRound()).
-                filter(entry->entry.deserializePrepareMessage().getClientData().getValue() == highestPrepared.getClientData().getValue())
-                .collect(Collectors.toCollection(HashSet::new));
+            HashSet<ConsensusMessage> messagesToSend = prepareMessages.stream()
+                    .filter(entry -> entry.getRound() == highestPrepared.getPreparedRound())
+                    .filter(entry -> entry.deserializePrepareMessage().getClientData().getValue() == highestPrepared
+                            .getPreparedBlock().getValue()) //TODO: Find out how to compare blocks.
+                    .collect(Collectors.toCollection(HashSet::new));
 
             for (ConsensusMessage m : messagesToSend) {
                 message.addPrepareMessage(m);
@@ -234,8 +244,7 @@ public class NodeService implements UDPService {
 
         this.link.broadcast(message);
     }
-    
-    
+
     public void startChangeRound() {
         int localConsensusInstance = this.consensusInstance.get();
         InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
@@ -255,38 +264,47 @@ public class NodeService implements UDPService {
 
         if (instance == null) {
             return;
-        } 
+        }
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
                         "{0} - Received ROUND_CHANGE message from {1} Consensus Instance {2}, Round {3}",
                         config.getId(), message.getSenderId(), message.getConsensusInstance(), message.getRound()));
 
-        if (message.getClientData() != null && !verifyClientData(message.getClientData())) {
+        if (message.getPreparedBlock() != null) {
             System.out.println("Message is not valid");
             return;
         }
+        
+        // Remove transaction if not authorized
+        block.forEachTransaction(transaction -> {
+                    if (!verifyClientData(transaction)) {
+                        block.removeTransaction(transaction);
+                    }
+                });
 
         roundChangeMessages.add(message);
 
         // Received quorum of ROUND_CHANGE. Line 11-16
-        int numMessages = (int) roundChangeMessages.stream().
-        filter(entry -> entry.getConsensusInstance() == localConsensusInstance).filter(entry -> entry.getRound() == instance.getCurrentRound()).count();
+        int numMessages = (int) roundChangeMessages.stream()
+                .filter(entry -> entry.getConsensusInstance() == localConsensusInstance)
+                .filter(entry -> entry.getRound() == instance.getCurrentRound()).count();
 
-        if (numMessages >=  this.quorum && this.config.isLeader() && !this.rule1 && this.justifyRoundChange(this.roundChangeMessages)) {
-            
+        if (numMessages >= this.quorum && this.config.isLeader() && !this.rule1
+                && this.justifyRoundChange(this.roundChangeMessages)) {
+
             this.rule1 = true;
 
-            ClientData value;
-            
+            Block block;
+
             RoundChangeMessage highestPrepared = this.highestPrepared(roundChangeMessages, instance.getCurrentRound());
-            
+
             if (highestPrepared.getPreparedRound() == -1) {
 
-                value = this.consensusToDataMapping.get(localConsensusInstance);
+                block = this.consensusToDataMapping.get(localConsensusInstance);
 
             } else {
-                value = highestPrepared.getClientData();
+                block = highestPrepared.getPreparedBlock();
             }
 
             // Leader broadcasts PRE-PREPARE message
@@ -294,15 +312,16 @@ public class NodeService implements UDPService {
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
 
-            this.link.broadcast(this.createConsensusMessage(value, localConsensusInstance, instance.getCurrentRound()));
+            this.link.broadcast(this.createConsensusMessage(block, localConsensusInstance, instance.getCurrentRound()));
 
             startTimer();
         }
-        
-        numMessages = (int) roundChangeMessages.stream().
-            filter(entry -> entry.getConsensusInstance() == localConsensusInstance).filter(entry -> entry.getRound() > instance.getCurrentRound()).count();
+
+        numMessages = (int) roundChangeMessages.stream()
+                .filter(entry -> entry.getConsensusInstance() == localConsensusInstance)
+                .filter(entry -> entry.getRound() > instance.getCurrentRound()).count();
         // Received f+1 round_change. Line 5-10
-        if (numMessages > (Math.floorDiv(nodesConfig.length - 1, 3)+1) && !this.rule2) {
+        if (numMessages > (Math.floorDiv(nodesConfig.length - 1, 3) + 1) && !this.rule2) {
             this.rule2 = true;
 
             int newRound = roundChangeMessages.stream()
@@ -320,7 +339,6 @@ public class NodeService implements UDPService {
         }
     }
 
-
     //
     public boolean justifyPrePrepare(ConsensusMessage message) {
         int localConsensusInstance = this.consensusInstance.get();
@@ -330,37 +348,38 @@ public class NodeService implements UDPService {
             return true;
         }
 
-        return checkRoundChangeMessages(message.deserializePrePrepareMessage().getClientData());
+        return checkRoundChangeMessages(message.deserializePrePrepareMessage().getBlock());
     }
 
     // Auxiliar to the justifies, checks round change messages with correct value
-    public boolean checkRoundChangeMessages(ClientData value) {
+    public boolean checkRoundChangeMessages(Block block2) {
         int localConsensusInstance = this.consensusInstance.get();
         InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
-        
-        Stream<RoundChangeMessage> messages = roundChangeMessages.stream().
-            filter(entry->entry.getConsensusInstance() == localConsensusInstance).filter(entry->entry.getRound()==instance.getCurrentRound());
 
-            // Quorum with no prepared round
-        if (messages.filter(entry->entry.getPreparedRound()==-1).count() >= this.quorum) {
+        Stream<RoundChangeMessage> messages = roundChangeMessages.stream()
+                .filter(entry -> entry.getConsensusInstance() == localConsensusInstance)
+                .filter(entry -> entry.getRound() == instance.getCurrentRound());
+
+        // Quorum with no prepared round
+        if (messages.filter(entry -> entry.getPreparedRound() == -1).count() >= this.quorum) {
             return true;
         }
 
         // Highest prepared message for this round
         RoundChangeMessage hp = highestPrepared(roundChangeMessages, instance.getCurrentRound());
-        
+
         // possible attack - byzantine process sends very big prepared round
-        
-        ClientData v;
+
+        Block v;
 
         // For justify round change
-        if (value == null) {
-            v = hp.getClientData();
+        if (block2 == null) {
+            v = hp.getPreparedBlock();
         }
 
         // For justify pre-prepare
         else {
-            v = value;
+            v = block2;
         }
 
         // For each round change message, find the prepare messages that justify it
@@ -368,39 +387,38 @@ public class NodeService implements UDPService {
         for (RoundChangeMessage m : roundChangeMessages) {
             if (m.getConsensusInstance() != localConsensusInstance || m.getRound() != instance.getCurrentRound())
                 continue;
-            
+
             // Get prepare messages with prepared round and value equal to highest prepared
-            int n = (int) m.getPrepareMessages().stream().
-                filter(entry->entry.getConsensusInstance()==localConsensusInstance).
-                filter(entry->entry.getRound() == hp.getPreparedRound()).
-                filter(entry->(entry.deserializePrepareMessage().getClientData().getValue().equals(v.getValue()) && verifyClientData(entry.deserializePrepareMessage().getClientData()))).
-                count();
+            int n = (int) m.getPrepareMessages().stream()
+                    .filter(entry -> entry.getConsensusInstance() == localConsensusInstance)
+                    .filter(entry -> entry.getRound() == hp.getPreparedRound())
+                    .filter(entry -> (entry.deserializePrepareMessage().getClientData().getValue().equals(v.getValue()) // Todo: Block comparison
+                            && verifyClientData(entry.deserializePrepareMessage().getClientData())))
+                    .count();
 
             if (n >= this.quorum) {
                 num_messages++;
             }
         }
 
-        if (num_messages >= this.quorum) 
+        if (num_messages >= this.quorum)
             return true;
 
         return false;
     }
 
-
     // Find quorum of justified round change messages
-    public boolean justifyRoundChange(HashSet<RoundChangeMessage> roundChangeMessages){
+    public boolean justifyRoundChange(HashSet<RoundChangeMessage> roundChangeMessages) {
         return checkRoundChangeMessages(null);
     }
-    
 
-    public RoundChangeMessage highestPrepared(Collection<RoundChangeMessage> roundChangeMessages, int round){
+    public RoundChangeMessage highestPrepared(Collection<RoundChangeMessage> roundChangeMessages, int round) {
         int localConsensusInstance = this.consensusInstance.get();
 
-        RoundChangeMessage highestPrepared =
-            roundChangeMessages.stream().
-            filter(entry -> entry.getConsensusInstance() == localConsensusInstance).filter(entry -> entry.getRound() == round).
-            max(Comparator.comparingInt(entry -> entry.getPreparedRound())).orElse(null);
+        RoundChangeMessage highestPrepared = roundChangeMessages.stream()
+                .filter(entry -> entry.getConsensusInstance() == localConsensusInstance)
+                .filter(entry -> entry.getRound() == round)
+                .max(Comparator.comparingInt(entry -> entry.getPreparedRound())).orElse(null);
 
         return highestPrepared;
     }
@@ -431,12 +449,12 @@ public class NodeService implements UDPService {
      *
      * @param inputValue Value to value agreed upon
      */
-    public void startConsensus(ClientData clientData) {
-
+    public void startConsensus(Block block) {
         // Set initial consensus values
         int localConsensusInstance = getConsensusInstance().incrementAndGet();
-        InstanceInfo existingConsensus = this.instanceInfo.put(localConsensusInstance, new InstanceInfo(clientData));
-        this.consensusToDataMapping.put(localConsensusInstance, clientData);
+        InstanceInfo existingConsensus = this.instanceInfo.put(localConsensusInstance,
+                new InstanceInfo(block));
+        this.consensusToDataMapping.put(localConsensusInstance, block);
         // If startConsensus was already called for a given round
         if (existingConsensus != null) {
             LOGGER.log(Level.INFO, MessageFormat.format("{0} - Node already started consensus for instance {1}",
@@ -457,18 +475,54 @@ public class NodeService implements UDPService {
         this.rule1 = false;
         this.rule2 = false;
 
-        // Leader broadcasts PRE-PREPARE message
-        if (this.config.isLeader()) {
-            InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
-            this.link.broadcast(this.createConsensusMessage(clientData, localConsensusInstance, instance.getCurrentRound()));
-        } else {
+        // Return if not leader
+        if (!this.config.isLeader()) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Node is not leader, waiting for PRE-PREPARE message", config.getId()));
+            startTimer();
+            return;
         }
 
+        // Remove transaction if not authorized
+
+        block.forEachTransaction(transaction -> {
+            if (!authorizeClient(transaction)) {
+                block.removeTransaction(transaction);
+            }
+        });
+
+        InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
+        LOGGER.log(Level.INFO,
+                MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
+        this.link.broadcast(
+                this.createConsensusMessage(block, localConsensusInstance, instance.getCurrentRound()));
         startTimer();
+
+    }
+
+    public boolean authorizeClient(ClientData transactionData) {
+        // Verify message signature, checks that source is the client
+        if (!verifyClientData(transactionData)) {
+            System.out.println("Message is not valid");
+            return false;
+        }
+
+        String transferContent = transactionData.getValue();
+        String amount = transferContent.split(" ")[0];
+        String destination = transferContent.split(" ")[1];
+        String source = transactionData.getClientID();
+
+        // Check if the client has enough balance to send the amount
+        if (clientBalances.getOrDefault(source, 0.0f) < Float.parseFloat(amount)) {
+            System.out.println("Client does not have enough balance to send the amount");
+            return false;
+        }
+        // Check that destination is a valid client, meaning is in the clientBalances
+        if (!clientBalances.containsKey(destination)) {
+            System.out.println("Destination is not a valid client");
+            return false;
+        }
+        return true;
     }
 
     /*
@@ -490,22 +544,24 @@ public class NodeService implements UDPService {
         int round = message.getRound();
         String senderId = message.getSenderId();
         int senderMessageId = message.getMessageId();
- 
-        PrePrepareMessage prePrepareMessage = message.deserializePrePrepareMessage();
-        this.consensusToDataMapping.put(consensusInstance, prePrepareMessage.getClientData());
 
-        ClientData clientData = prePrepareMessage.getClientData();
+        PrePrepareMessage prePrepareMessage = message.deserializePrePrepareMessage();
+        this.consensusToDataMapping.put(consensusInstance, prePrepareMessage.getBlock());
+
+        Block block = prePrepareMessage.getBlock();
+
+        // Remove transaction if not authorized
+
+        block.forEachTransaction(transaction -> {
+            if (!authorizeClient(transaction)) {
+                block.removeTransaction(transaction);
+            }
+        });
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
                         "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}",
                         config.getId(), senderId, consensusInstance, round));
-
-
-        if (!verifyClientData(clientData)) {
-            System.out.println("Message is not valid");
-            return;
-        }
 
         // Verify if pre-prepare was sent by leader
         if (!isLeader(senderId)) {
@@ -518,10 +574,9 @@ public class NodeService implements UDPService {
             System.out.println("PrePrepare message not justified");
             return;
         }
-            
 
         // Set instance value
-        this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(clientData));
+        this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(block));
 
         // Within an instance of the algorithm, each upon rule is triggered at most once
         // for any round r
@@ -534,7 +589,7 @@ public class NodeService implements UDPService {
                             config.getId(), consensusInstance, round));
         }
 
-        PrepareMessage prepareMessage = new PrepareMessage(prePrepareMessage.getClientData());
+        PrepareMessage prepareMessage = new PrepareMessage(prePrepareMessage.getBlock());
 
         ConsensusMessage consensusMessage = new ConsensusMessageBuilder(config.getId(), Message.Type.PREPARE)
                 .setConsensusInstance(consensusInstance)
@@ -567,23 +622,24 @@ public class NodeService implements UDPService {
 
         PrepareMessage prepareMessage = message.deserializePrepareMessage();
 
-        ClientData clientData = prepareMessage.getClientData();
+        Block block = prepareMessage.getBlock();
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
                         "{0} - Received PREPARE message from {1}: Consensus Instance {2}, Round {3}",
                         config.getId(), senderId, consensusInstance, round));
 
-        if (!verifyClientData(clientData)) {
-            System.out.println("Message is not valid");
-            return;
-        }
+        block.forEachTransaction(transaction -> {
+            if (!verifyClientData(transaction)) {
+                block.removeTransaction(transaction);
+            }
+        });
 
         // Doesn't add duplicate messages
         prepareMessages.addMessage(message);
 
         // Set instance values
-        this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(clientData));
+        this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(block));
         instance = this.instanceInfo.get(consensusInstance);
 
         // Within an instance of the algorithm, each upon rule is triggered at most once
@@ -612,26 +668,28 @@ public class NodeService implements UDPService {
         // Find value with valid quorum
         Optional<String> preparedValue = prepareMessages.hasValidPrepareQuorum(config.getId(), consensusInstance,
                 round);
-        
+
         if (preparedValue.isPresent() && instance.getPreparedRound() < round) {
-            
-            Optional<ConsensusMessage> prepMessage = this.prepareMessages.getMessages(consensusInstance, round).values().stream().filter(entry->entry.deserializePrepareMessage().getClientData().getValue().equals(preparedValue.get())).findAny();
-            
+
+            Optional<ConsensusMessage> prepMessage = this.prepareMessages
+                    .getMessages(consensusInstance, round).values().stream().filter(entry -> entry
+                            .deserializePrepareMessage().getClientData().getValue().equals(preparedValue.get()))
+                    .findAny(); // TODO
+
             if (!prepMessage.isPresent()) {
                 System.out.println("Error getting client data");
                 return;
             }
 
-            ClientData preparedData = prepMessage.get().deserializePrepareMessage().getClientData();
+            Block preparedBlock = prepMessage.get().deserializePrepareMessage().getBlock();
 
-            instance.setPreparedData(preparedData);
+            instance.setPreparedData(preparedBlock);
             instance.setPreparedRound(round);
 
             // Must reply to prepare message senders
             Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(consensusInstance, round)
                     .values();
-
-            CommitMessage c = new CommitMessage(preparedData);
+            CommitMessage c = new CommitMessage(block);
             instance.setCommitMessage(c);
 
             sendersMessage.forEach(senderMessage -> {
@@ -664,20 +722,25 @@ public class NodeService implements UDPService {
         int consensusInstance = message.getConsensusInstance();
         int round = message.getRound();
 
+        CommitMessage commitMessage = message.deserializeCommitMessage();
+        Block block = commitMessage.getBlock();
+
         LOGGER.log(Level.INFO,
                 MessageFormat.format("{0} - Received COMMIT message from {1}: Consensus Instance {2}, Round {3}",
                         config.getId(), message.getSenderId(), consensusInstance, round));
 
-        if (!verifyClientData(message.deserializeCommitMessage().getData())) {
-            System.out.println("Message is not valid");
-            return;
-        }
+        block.forEachTransaction(transaction -> {
+            if (!verifyClientData(transaction)) {
+                message.deserializeCommitMessage().getBlock().removeTransaction(transaction);
+            }
+        });
 
         commitMessages.addMessage(message);
 
         instance = this.instanceInfo.get(consensusInstance);
 
         if (instance == null) {
+
             // Should never happen because only receives commit as a response to a prepare
             // message
             MessageFormat.format(
@@ -689,6 +752,7 @@ public class NodeService implements UDPService {
         // Within an instance of the algorithm, each upon rule is triggered at most once
         // for any round r
         if (instance.getCommittedRound() >= round) {
+
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                             "{0} - Already received COMMIT message for Consensus Instance {1}, Round {2}, ignoring",
@@ -701,62 +765,43 @@ public class NodeService implements UDPService {
 
         if (commitValue.isPresent() && instance.getCommittedRound() < round) {
             System.out.println("Value to commit: " + commitValue.get());
-            Optional<ConsensusMessage> prepMessage = this.commitMessages.getMessages(consensusInstance, round).values().stream().filter(entry->entry.deserializeCommitMessage().getData().getValue().equals(commitValue.get())).findAny();
-             
+            Optional<ConsensusMessage> prepMessage = this.commitMessages.getMessages(consensusInstance, round).values()
+                    .stream()
+                    .filter(entry -> entry.deserializeCommitMessage().getClientData().getValue() //TODO
+                            .equals(commitValue.get()))
+                    .findAny(); // TODO
+
             if (!prepMessage.isPresent()) {
                 System.out.println("Error getting client data");
                 return;
             }
 
-            ClientData commitedData = prepMessage.get().deserializeCommitMessage().getData();
-
+            Block commitedBlock = prepMessage.get().deserializeCommitMessage().getBlock();
             cancelTimer();
-
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
-            
-            ClientData clientData = this.consensusToDataMapping.get(consensusInstance);
-            
-
-            // Check if this client request is up next
-            while (!clientRequestQueue.isEmpty()) {
-                // Peek at the next client request without removing it from the queue
-                ClientData nextClientRequest = clientRequestQueue.peek();
-                
-                // Check if the next client request matches the current client request
-                if (nextClientRequest.getClientID().equals(clientData.getClientID()) && nextClientRequest.getRequestID() == clientData.getRequestID()) {
-                    // This client request is up next, break out of the loop
-                    clientRequestQueue.poll();
-                    break;
-                }
-
-                // Wait for 0.5 seconds before checking again
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-
 
 
             // Append value to the ledger (must be synchronized to be thread-safe)
-            synchronized (ledger) {
+            // synchronized (ledger) {
+            //     String value = commitedData.getValue();
 
-                String value = commitedData.getValue();
+            //     // Increment size of ledger to accommodate current instance
+            //     ledger.ensureCapacity(consensusInstance);
+            //     while (ledger.size() < consensusInstance - 1) {
+            //         ledger.add("");
+            //     }
 
-                // Increment size of ledger to accommodate current instance
-                ledger.ensureCapacity(consensusInstance);
-                while (ledger.size() < consensusInstance - 1) {
-                    ledger.add("");
-                }
+            //     ledger.add(consensusInstance - 1, value);
 
-                ledger.add(consensusInstance - 1, value);
+            //     LOGGER.log(Level.INFO,
+            //             MessageFormat.format(
+            //                     "{0} - Current Ledger: {1}",
+            //                     config.getId(), String.join("", ledger)));
+            // }
 
-                LOGGER.log(Level.INFO,
-                        MessageFormat.format(
-                                "{0} - Current Ledger: {1}",
-                                config.getId(), String.join("", ledger)));
+            synchronized (this.blockchain){
+                this.blockchain.addBlock(commitedBlock);
             }
 
             lastDecidedConsensusInstance.getAndIncrement();
@@ -766,18 +811,47 @@ public class NodeService implements UDPService {
                             "{0} - Decided on Consensus Instance {1}, Round {2}, Successful? {3}",
                             config.getId(), consensusInstance, round, true));
 
-            ClientMessage confirmationMessage = new ClientMessage(config.getId(), Message.Type.CLIENT_CONFIRMATION);
-            confirmationMessage.setClientData(clientData);
-            link.send(clientData.getClientID(), confirmationMessage);
+
+            block.forEachTransaction(transaction -> {executeTransaction(transaction);});
+
             this.block = null;
         }
     }
 
-    public boolean verifyClientData(ClientData clientData){
-        byte [] signature = clientData.getSignature();
+    public void executeTransaction(ClientData transaction){
+        
+        ClientMessage confirmationMessage = new ClientMessage(config.getId(), Message.Type.CLIENT_CONFIRMATION);
+        confirmationMessage.setClientData(transaction);
+        link.send(transaction.getClientID(), confirmationMessage);
+        // TODO could add message for receiver to notify that received money. Would need
+        // to get quorum for this.
+
+        // Update sender and receiver balances
+        String[] transferContent = transaction.getValue().split(" ");
+        String amount = transferContent[0];
+        String destination = transferContent[1];
+
+        // Update sender balance
+        float senderBalance = clientBalances.getOrDefault(transaction.getClientID(), 0.0f);
+        clientBalances.put(transaction.getClientID(), senderBalance - Float.parseFloat(amount));
+        // Update receiver balance
+        float receiverBalance = clientBalances.getOrDefault(destination, 0.0f);
+        clientBalances.put(destination, receiverBalance + Float.parseFloat(amount));
+    }
+
+    public boolean verifyClientData(ClientData clientData) {
+        byte[] signature = clientData.getSignature();
         String value = clientData.getValue();
-        try {
-            if (Authenticate.verifyMessage(config.getNodePubKey(clientData.getClientID()), value, signature)){
+
+        // Check if the signature is null and immediately return false if so
+        if (signature == null) {
+            System.out.println("Message has no signature and will be ignored.");
+            return false;
+        }
+
+        try { // Verifies that payload is same as signature. Fails if value wrong, or clientID
+              // wrong
+            if (Authenticate.verifyMessage(config.getNodePubKey(clientData.getClientID()), value, signature)) {
                 return true;
             }
         } catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
@@ -788,20 +862,14 @@ public class NodeService implements UDPService {
         return false;
     }
 
-    public void handleClientRequest(ClientMessage message) {
-
-        if (message == null || message.getClientData() == null)
-            return;
-
-        ClientData clientData = message.getClientData();
-        if (!this.verifyClientData(clientData)){
+    public void handleTransfer(ClientMessage transferMessage) {
+        ClientData transferData = transferMessage.getClientData();
+        if (!this.verifyClientData(transferData)) {
             return;
         }
+        clientRequestQueue.offer(transferData);
 
-        clientRequestQueue.offer(clientData);
-        
 
-        Transaction transaction = new Transaction(clientData.getClientID(), "client2", clientData);
 
         if (block == null){
             if (this.waitingBlocks.isEmpty()){
@@ -811,23 +879,72 @@ public class NodeService implements UDPService {
                 this.block = this.waitingBlocks.poll();
             }
 
-            while (this.transactionQueue.peek() != null){
+            while (this.transactionQueue.peek() != null || !this.block.isFull()){
                 this.block.addTransaction(this.transactionQueue.poll());
+            }
+            String prevHash;
+            try {
+                prevHash = Blockchain.calculateHash(blockchain.getLatestBlock());
+                this.block.setPrevHash(prevHash);
+            } catch (NoSuchAlgorithmException | IOException e) {
+                e.printStackTrace();
+            }
+
+        }
+
+        if (!this.block.addTransaction(transferData)){
+            this.transactionQueue.add(transferData);
+            
+        }
+    }
+
+    public void handleBalanceRequest(ClientMessage message) {
+        ClientData clientData = message.getClientData();
+        if (!this.verifyClientData(clientData)) {
+            return;
+        }
+
+        clientRequestQueue.offer(clientData);
+        
+
+        // Get the local balance of the id that the client is requesting
+        String balanceUser = clientData.getValue();
+        float balance = clientBalances.getOrDefault(balanceUser, 0.0f);
+
+        // Check if this client request is up next
+        while (!clientRequestQueue.isEmpty()) {
+            // Peek at the next client request without removing it from the queue
+            ClientData nextClientRequest = clientRequestQueue.peek();
+
+            // Check if the next client request matches the current client request
+            if (nextClientRequest.getClientID().equals(clientData.getClientID())
+                    && nextClientRequest.getRequestID() == clientData.getRequestID()) {
+                // This client request is up next, break out of the loop
+                clientRequestQueue.poll();
+                break;
+            }
+
+            // Wait for 0.5 seconds before checking again
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
         }
 
-        if (!this.block.addTransaction(transaction)){
-            this.transactionQueue.add(transaction);
-            
-        }
+        // Send the balance back to the client
+        BalanceMessage balanceMessage = new BalanceMessage(balance, clientData.getRequestID(),
+                clientData.getClientID(), config.getId(), Message.Type.BALANCE_RESPONSE);
+        balanceMessage.setRequestedClient(balanceUser);
 
-        // Prevent race conditions
-        if (this.block.isFull()){
-            this.startConsensus(this.block);
-        }
-        
+        link.send(clientData.getClientID(), balanceMessage);
+    }
 
-        this.startConsensus(clientData);
+
+    public void startConsensusWithTimer() {
+        int intervalInSeconds = 10; // Consensus every 10 seconds
+        System.out.println("Consensus timer expired. Start consensus");
+        scheduler.scheduleAtFixedRate(() -> startConsensus(block), 0, intervalInSeconds, TimeUnit.SECONDS);
     }
 
     @Override
@@ -851,9 +968,11 @@ public class NodeService implements UDPService {
 
                             switch (message.getType()) {
 
-                                case APPEND -> {
-                                    handleClientRequest((ClientMessage) message);
-                                }
+                                case TRANSFER ->
+                                    handleTransfer((ClientMessage) message);
+
+                                case BALANCE ->
+                                    handleBalanceRequest((ClientMessage) message);
 
                                 case PRE_PREPARE ->
                                     uponPrePrepare((ConsensusMessage) message);

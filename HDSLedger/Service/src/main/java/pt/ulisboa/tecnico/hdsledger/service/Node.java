@@ -51,13 +51,10 @@ public class Node {
             this.nodeService = new NodeService(linkToNodes, nodeConfig, leaderConfig,
                     nodeConfigs);
 
-            // if (nodeConfig.isLeader())
-            //     Thread.sleep(30000);
-            
-            
+            nodeService.initialiseClientBalances(clientConfigs);
+
             nodeService.listen();
 
-            
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -69,20 +66,9 @@ public class Node {
         nodesConfigPath += args[1];
 
         Node node = new Node(id, nodesConfigPath, clientsConfigPath);
-        node.start();
-    }
-
-    public void start() {
-        nodeService.listen();
     }
 
     public void sendTestMessage(String recipientId, Message message) {
         nodeService.sendTestMessage(recipientId, message);
     }
 }
-
-
-    
-    
-        
-    

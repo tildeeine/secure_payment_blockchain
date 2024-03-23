@@ -60,11 +60,12 @@ public class MessageBucket {
     }
 
     public Optional<String> hasValidCommitQuorum(String nodeId, int instance, int round) {
+
         // Create mapping of value to frequency
         HashMap<String, Integer> frequency = new HashMap<>();
         bucket.get(instance).get(round).values().forEach((message) -> {
             CommitMessage commitMessage = message.deserializeCommitMessage();
-            String value = commitMessage.getData().getValue();
+            String value = commitMessage.getClientData().getValue();
             frequency.put(value, frequency.getOrDefault(value, 0) + 1);
         });
 

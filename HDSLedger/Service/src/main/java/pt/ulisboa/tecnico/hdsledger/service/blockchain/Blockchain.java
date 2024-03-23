@@ -11,21 +11,27 @@ import java.security.NoSuchAlgorithmException;
 
 public class Blockchain {
     
-    private List<Block> blocks;
+    private ArrayList<Block> blocks;
 
     public Blockchain() {
         this.blocks = new ArrayList<>();
         // Genesis block (initial block)
-        Block genesisBlock = new Block("0"); // Assuming "0" as the initial hash
+        Block genesisBlock = new Block();
         this.blocks.add(genesisBlock);
     }
 
     // Add a new block to the blockchain
-    public void addBlock(Block block) throws NoSuchAlgorithmException, IOException {
-        Block previousBlock = getLatestBlock();
-        String prevHash = calculateHash(previousBlock);
-        block.setPrevHash(prevHash);
+    public boolean addBlock(Block block) throws NoSuchAlgorithmException, IOException {
+        if (block.getPrevHash() == null){
+            System.out.println("No prevHash in block");
+            return false;
+        }
+        else if (!block.getPrevHash().equals(calculateHash(this.getLatestBlock()))){
+            System.out.println("PrevHash does not equal the previous block's hash");
+            return false;
+        }
         blocks.add(block);
+        return true;
     }
 
     public static boolean verifyBlock(Block block, String hash) throws NoSuchAlgorithmException, IOException{

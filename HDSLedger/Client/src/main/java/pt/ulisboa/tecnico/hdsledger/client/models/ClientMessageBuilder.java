@@ -1,4 +1,4 @@
-package pt.ulisboa.tecnico.hdsledger.client.services;
+package pt.ulisboa.tecnico.hdsledger.client.models;
 
 import java.security.PrivateKey;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -13,22 +13,22 @@ public class ClientMessageBuilder {
 
     // Client request instance
     private final AtomicInteger clientRequest = new AtomicInteger(0);
-    // Client key private 
+    // Client key private
     private PrivateKey privateKey;
 
-    public ClientMessageBuilder(ProcessConfig processConfig){
+    public ClientMessageBuilder(ProcessConfig processConfig) {
         this.privateKey = processConfig.getPrivateKey();
     }
 
-    public ClientMessage buildMessage(String payload, String senderID){
-        
-        ClientMessage clientMessage = new ClientMessage(senderID, Message.Type.APPEND);
-        
+    public ClientMessage buildMessage(String payload, String senderID, Message.Type messagetype) {
+
+        ClientMessage clientMessage = new ClientMessage(senderID, messagetype);
+
         ClientData clientData = new ClientData();
         clientData.setClientID(senderID);
         clientData.setRequestID(this.clientRequest.getAndIncrement());
-        
-        try{
+
+        try {
             byte[] signature = Authenticate.signMessage(this.privateKey, payload);
             clientData.setSignature(signature);
         } catch (Exception e) {
@@ -36,7 +36,6 @@ public class ClientMessageBuilder {
         }
 
         clientData.setValue(payload);
-
         clientMessage.setClientData(clientData);
 
         return clientMessage;

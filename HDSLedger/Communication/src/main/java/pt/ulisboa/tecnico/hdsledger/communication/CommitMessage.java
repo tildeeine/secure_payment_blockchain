@@ -2,17 +2,19 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 
 import com.google.gson.Gson;
 
+import pt.ulisboa.tecnico.hdsledger.service.blockchain.Block;
+
 public class CommitMessage {
 
     // Value
-    private ClientData value;
+    private Block block;
 
-    public CommitMessage(ClientData value) {
-        this.value = value;
+    public CommitMessage(Block block) {
+        this.block = block;
     }
 
-    public ClientData getData() {
-        return value;
+    public Block getBlock() {
+        return this.block;
     }
 
     public String toJson() {

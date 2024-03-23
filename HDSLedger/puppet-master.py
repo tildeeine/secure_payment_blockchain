@@ -46,7 +46,7 @@ with open(f"Client/src/main/resources/{client_config}") as f:
         pid = os.fork()
         if pid == 0:
             os.system(
-                    f"{terminal} sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']} {client_config}' ; sleep 500\"")
+                    f"{terminal} sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']}' ; sleep 500\"")
             sys.exit()
 
 signal.signal(signal.SIGINT, quit_handler)

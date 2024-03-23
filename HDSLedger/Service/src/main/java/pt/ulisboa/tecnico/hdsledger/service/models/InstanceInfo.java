@@ -1,20 +1,19 @@
 package pt.ulisboa.tecnico.hdsledger.service.models;
 
-
-import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
 import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
+import pt.ulisboa.tecnico.hdsledger.service.blockchain.Block;
 
 public class InstanceInfo {
 
     private int currentRound = 1;
     private int preparedRound = -1;
-    private ClientData preparedData;
+    private Block preparedBlock;
     private CommitMessage commitMessage;
-    private ClientData clientData;
+    private Block block;
     private int committedRound = -1;
 
-    public InstanceInfo(ClientData clientData) {
-        this.clientData = clientData;
+    public InstanceInfo(Block block) {
+        this.block = block;
     }
 
     public int getCurrentRound() {
@@ -33,20 +32,20 @@ public class InstanceInfo {
         this.preparedRound = preparedRound;
     }
 
-    public ClientData getPreparedData() {
-        return preparedData;
+    public Block getpreparedBlock() {
+        return preparedBlock;
     }
 
-    public void setPreparedData(ClientData preparedData) {
-        this.preparedData = preparedData;
+    public void setPreparedData(Block preparedBlock) {
+        this.preparedBlock = preparedBlock;
     }
 
-    public ClientData getClientData() {
-        return clientData;
+    public Block getBlock() {
+        return this.block;
     }
 
-    public void setClientData(ClientData clientData) {
-        this.clientData = clientData;
+    public void setBlock(Block block) {
+        this.block = block;
     }
 
     public int getCommittedRound() {
