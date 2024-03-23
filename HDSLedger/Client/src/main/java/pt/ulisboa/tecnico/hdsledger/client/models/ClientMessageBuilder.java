@@ -27,7 +27,6 @@ public class ClientMessageBuilder {
         ClientData clientData = new ClientData();
         clientData.setClientID(senderID);
         clientData.setRequestID(this.clientRequest.getAndIncrement());
-        System.out.println("Request ID: " + clientData.getRequestID());// !
         payload += " " + clientData.getRequestID(); // Sign request ID to work as nonce
 
         try {
