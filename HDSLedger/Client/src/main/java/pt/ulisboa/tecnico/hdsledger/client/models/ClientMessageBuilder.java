@@ -12,7 +12,7 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 public class ClientMessageBuilder {
 
     // Client request instance
-    private final AtomicInteger clientRequest = new AtomicInteger(0);
+    private final AtomicInteger clientRequest = new AtomicInteger(1);
     // Client key private
     private PrivateKey privateKey;
 
@@ -27,6 +27,7 @@ public class ClientMessageBuilder {
         ClientData clientData = new ClientData();
         clientData.setClientID(senderID);
         clientData.setRequestID(this.clientRequest.getAndIncrement());
+        System.out.println("Request ID: " + clientData.getRequestID());// !
         payload += " " + clientData.getRequestID(); // Sign request ID to work as nonce
 
         try {

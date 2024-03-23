@@ -56,7 +56,7 @@ public class ClientService implements UDPServiceClient {
 
     public void clientTransfer(ClientMessage transferMessage) {
         // Create a message
-        this.requestTracker.put(transferMessage.getClientData().getRequestID(), 0);
+        this.transferRequestTracker.put(transferMessage.getClientData().getRequestID(), 0);
         link.broadcast(transferMessage);
     }
 
@@ -138,7 +138,7 @@ public class ClientService implements UDPServiceClient {
         }
         // Check if request id is in transferRequestTracker map.
         // Increment value with one
-        if (requestTracker.containsKey(requestID)) {
+        if (transferRequestTracker.containsKey(requestID)) {
             int count = transferRequestTracker.getOrDefault(requestID, 0) + 1;
             transferRequestTracker.put(requestID, count);
             if (count == this.allowedFaults + 1) {
