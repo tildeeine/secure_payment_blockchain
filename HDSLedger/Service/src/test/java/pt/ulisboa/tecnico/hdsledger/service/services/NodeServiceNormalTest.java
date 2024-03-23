@@ -299,7 +299,7 @@ class NodeServiceNormalTest {
         int ledgerLengthBefore = nodeService.getLedger().size();
 
         // Set up client data
-        ClientData clientData = setupClientData("20 client2");
+        ClientData clientData = setupClientData("20 client2 2");
 
         // Test setup: Ensure an InstanceInfo exists for the current consensus instance
         int initialConsensusInstance = nodeService.getConsensusInstance().get();
@@ -310,7 +310,6 @@ class NodeServiceNormalTest {
 
         // Send quorum of prepare messages
         int consensusInstance = nodeService.getConsensusInstance().get();
-        System.out.println("Consensus instance: " + consensusInstance); // !
         int round = 1;
         CommitMessage commitMessage = new CommitMessage(clientData);
         int f = Math.floorDiv(nodeConfigs.length - 1, 3);

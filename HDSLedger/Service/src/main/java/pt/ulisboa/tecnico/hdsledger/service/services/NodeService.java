@@ -82,6 +82,9 @@ public class NodeService implements UDPService {
     private Map<Integer, ClientData> consensusToDataMapping = new ConcurrentHashMap<>();
     // Map of clientID strings to client balances, used for balanceRequests
     private Map<String, Float> clientBalances = new ConcurrentHashMap<>();
+    // Map of used request IDs to client IDs, used for checking if a request ID has
+    // already been used
+    private Map<String, Integer> lastUsedRequestIDs = new ConcurrentHashMap<>();
 
     // if the rules have been done already
     private boolean rule1 = false;
@@ -455,7 +458,7 @@ public class NodeService implements UDPService {
             return;
         }
 
-        if (!authorizeClient(transferData)) {
+        if (!authorizeClientTransaction(transferData)) {
             return;
         }
 
@@ -468,16 +471,18 @@ public class NodeService implements UDPService {
 
     }
 
-    public boolean authorizeClient(ClientData transactionData) {
+    public boolean authorizeClientTransaction(ClientData transactionData) { // ! Add verification of request ID as
+                                                                            // nonce, right in sequence
         // Verify message signature, checks that source is the client
         if (!verifyClientData(transactionData)) {
             System.out.println("Message is not valid");
             return false;
         }
 
-        String transferContent = transactionData.getValue();
-        String amount = transferContent.split(" ")[0];
-        String destination = transferContent.split(" ")[1];
+        String[] transferContent = transactionData.getValue().split(" ");
+        String amount = transferContent[0];
+        String destination = transferContent[1];
+        String requestID = transferContent[2];
         String source = transactionData.getClientID();
 
         // Check if the client has enough balance to send the amount
@@ -490,6 +495,15 @@ public class NodeService implements UDPService {
             System.out.println("Destination is not a valid client");
             return false;
         }
+        if (!(Integer.parseInt(requestID) > lastUsedRequestIDs.getOrDefault(source, 0))) { // if no registered
+                                                                                           // requestIds, this is first
+                                                                                           // request for user
+            // ? Should we handle differently than ignore? Doesn't handle our of order
+            // requests
+            System.out.println("Request ID already used for this client, ignoring");
+            return false;
+        }
+
         return true;
     }
 
@@ -518,7 +532,7 @@ public class NodeService implements UDPService {
 
         ClientData clientData = prePrepareMessage.getClientData();
 
-        if (!authorizeClient(clientData)) {
+        if (!authorizeClientTransaction(clientData)) {
             return;
         }
 
@@ -800,6 +814,7 @@ public class NodeService implements UDPService {
             String[] transferContent = commitedData.getValue().split(" ");
             String amount = transferContent[0];
             String destination = transferContent[1];
+            String requestId = transferContent[2];
 
             // Update sender balance
             float senderBalance = clientBalances.getOrDefault(clientData.getClientID(), 0.0f);
@@ -807,6 +822,8 @@ public class NodeService implements UDPService {
             // Update receiver balance
             float receiverBalance = clientBalances.getOrDefault(destination, 0.0f);
             clientBalances.put(destination, receiverBalance + Float.parseFloat(amount));
+            // Upate last used request ID
+            lastUsedRequestIDs.put(clientData.getClientID(), Integer.parseInt(requestId));
         }
     }
 
@@ -851,7 +868,7 @@ public class NodeService implements UDPService {
 
         clientRequestQueue.offer(clientData);
         // Get the local balance of the id that the client is requesting
-        String balanceUser = clientData.getValue();
+        String balanceUser = clientData.getValue().split(" ")[0];
         float balance = clientBalances.getOrDefault(balanceUser, 0.0f);
 
         // Check if this client request is up next
