@@ -17,6 +17,7 @@ import java.util.Queue;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -32,6 +33,9 @@ import pt.ulisboa.tecnico.hdsledger.communication.PrePrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.RoundChangeMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.builder.ConsensusMessageBuilder;
+import pt.ulisboa.tecnico.hdsledger.service.blockchain.Block;
+import pt.ulisboa.tecnico.hdsledger.service.blockchain.Blockchain;
+import pt.ulisboa.tecnico.hdsledger.service.blockchain.Transaction;
 import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.service.models.MessageBucket;
 import pt.ulisboa.tecnico.hdsledger.utilities.Authenticate;
@@ -92,6 +96,14 @@ public class NodeService implements UDPService {
 
     private int quorum;
 
+    private Blockchain blockchain;
+
+    private ConcurrentLinkedQueue<Block> waitingBlocks = new ConcurrentLinkedQueue<>();
+
+    private ConcurrentLinkedQueue<Transaction> transactionQueue = new ConcurrentLinkedQueue<>();
+
+    private Block block;
+
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig leaderConfig, ProcessConfig[] nodesConfig) {
 
@@ -110,6 +122,8 @@ public class NodeService implements UDPService {
         this.quorum = Math.floorDiv(nodesConfig.length + f, 2) + 1;
 
         this.clientRequestQueue = new LinkedList<>();
+
+        this.blockchain = new Blockchain();
     }
 
 
@@ -755,6 +769,7 @@ public class NodeService implements UDPService {
             ClientMessage confirmationMessage = new ClientMessage(config.getId(), Message.Type.CLIENT_CONFIRMATION);
             confirmationMessage.setClientData(clientData);
             link.send(clientData.getClientID(), confirmationMessage);
+            this.block = null;
         }
     }
 
@@ -784,6 +799,34 @@ public class NodeService implements UDPService {
         }
 
         clientRequestQueue.offer(clientData);
+        
+
+        Transaction transaction = new Transaction(clientData.getClientID(), "client2", clientData);
+
+        if (block == null){
+            if (this.waitingBlocks.isEmpty()){
+                this.block = new Block();
+            }
+            else{
+                this.block = this.waitingBlocks.poll();
+            }
+
+            while (this.transactionQueue.peek() != null){
+                this.block.addTransaction(this.transactionQueue.poll());
+            }
+        }
+
+        if (!this.block.addTransaction(transaction)){
+            this.transactionQueue.add(transaction);
+            
+        }
+
+        // Prevent race conditions
+        if (this.block.isFull()){
+            this.startConsensus(this.block);
+        }
+        
+
         this.startConsensus(clientData);
     }
 

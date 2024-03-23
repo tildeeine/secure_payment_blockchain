@@ -1,5 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.service.blockchain;
 
+import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
+
 public class Transaction {
     
     private String senderID;
@@ -8,10 +10,10 @@ public class Transaction {
 
     private ClientData clientData;
 
-    public Transaction(senderID, recieverID, amount){
+    public Transaction(String senderID, String recieverID, ClientData clientData){
         this.senderID = senderID;
         this.recieverID = recieverID;
-        this.amount = amount;
+        this.clientData = clientData;
     }
 
 
@@ -20,10 +22,10 @@ public class Transaction {
     }
 
     public String getRecieverID(){
-        return this.senderID;
+        return this.recieverID;
     }
 
-    public int getAmount(){
-        return this.senderID;
+    public ClientData getclientData(){
+        return this.clientData;
     }
 }
