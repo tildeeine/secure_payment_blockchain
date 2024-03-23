@@ -471,8 +471,12 @@ public class NodeService implements UDPService {
 
     }
 
-    public boolean authorizeClientTransaction(ClientData transactionData) { // ! Add verification of request ID as
-                                                                            // nonce, right in sequence
+    public boolean authorizeClientTransaction(ClientData transactionData) {
+        // Update client balance by doing balanceCheck
+        BalanceMessage balanceRequest = new BalanceMessage(config.getId(),
+                Message.Type.BALANCE); // node balance request
+        balanceRequest.setRequestedClient(transactionData.getClientID());
+        link.broadcast(balanceRequest);// Need to wait for response on this before it is updated
         // Verify message signature, checks that source is the client
         if (!verifyClientData(transactionData)) {
             System.out.println("Message is not valid");
@@ -860,12 +864,30 @@ public class NodeService implements UDPService {
         startConsensus(transferData);
     }
 
-    public void handleBalanceRequest(ClientMessage message) {
-        ClientData clientData = message.getClientData();
+    public void handleBalanceRequest(Message message) {
+        if (message instanceof ClientMessage) {
+            handleClientBalanceRequest((ClientMessage) message);
+        } else {
+            handleNodeBalanceRequest((BalanceMessage) message);
+        }
+    }
+
+    public void handleNodeBalanceRequest(BalanceMessage balanceRequest) {
+        String balanceUser = balanceRequest.getRequestedClient();
+        float balance = clientBalances.getOrDefault(balanceUser, 0.0f);
+
+        BalanceMessage balanceMessage = new BalanceMessage(config.getId(), Message.Type.BALANCE_RESPONSE);
+        balanceMessage.setRequestedClient(balanceUser);
+        balanceMessage.setBalance(balance);
+
+        link.send(balanceRequest.getClientID(), balanceMessage);
+    }
+
+    public void handleClientBalanceRequest(ClientMessage balanceRequest) {
+        ClientData clientData = balanceRequest.getClientData();
         if (!this.verifyClientData(clientData)) {
             return;
         }
-
         clientRequestQueue.offer(clientData);
         // Get the local balance of the id that the client is requesting
         String balanceUser = clientData.getValue().split(" ")[0];
@@ -893,11 +915,21 @@ public class NodeService implements UDPService {
         }
 
         // Send the balance back to the client
-        BalanceMessage balanceMessage = new BalanceMessage(balance, clientData.getRequestID(),
-                clientData.getClientID(), config.getId(), Message.Type.BALANCE_RESPONSE);
+        BalanceMessage balanceMessage = new BalanceMessage(config.getId(),
+                Message.Type.BALANCE_RESPONSE);
         balanceMessage.setRequestedClient(balanceUser);
+        balanceMessage.setBalance(balance);
+        balanceMessage.setClientId(clientData.getClientID());
+        balanceMessage.setRequestId(clientData.getRequestID());
 
         link.send(clientData.getClientID(), balanceMessage);
+    }
+
+    public void handleBalanceResponse(BalanceMessage balanceResponse) {
+        String balanceUser = balanceResponse.getRequestedClient();
+        float balance = balanceResponse.getBalance();
+
+        clientBalances.put(balanceUser, balance);
     }
 
     @Override
@@ -926,6 +958,9 @@ public class NodeService implements UDPService {
 
                                 case BALANCE ->
                                     handleBalanceRequest((ClientMessage) message);
+
+                                case BALANCE_RESPONSE ->
+                                    handleBalanceResponse((BalanceMessage) message);
 
                                 case PRE_PREPARE ->
                                     uponPrePrepare((ConsensusMessage) message);
