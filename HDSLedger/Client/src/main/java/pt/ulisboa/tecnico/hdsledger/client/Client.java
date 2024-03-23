@@ -1,13 +1,15 @@
 package pt.ulisboa.tecnico.hdsledger.client;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
-import pt.ulisboa.tecnico.hdsledger.client.services.ClientMessageBuilder;
+import pt.ulisboa.tecnico.hdsledger.client.models.ClientMessageBuilder;
+import pt.ulisboa.tecnico.hdsledger.client.models.Wallet;
 import pt.ulisboa.tecnico.hdsledger.client.services.ClientService;
 import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfigBuilder;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
+import pt.ulisboa.tecnico.hdsledger.communication.Message;
 
 import java.text.MessageFormat;
 import java.util.logging.Level;
@@ -22,7 +24,7 @@ public class Client {
     private static final String CLIENTCONFIGPATH = "src/main/resources/client_config.json";
     private static final String NODECONFIGPATH = "src/main/resources/regular_config.json";
 
-
+    private static Wallet wallet;
 
     public static void main(String[] args) throws IOException, ClassNotFoundException {
         try {
@@ -37,6 +39,7 @@ public class Client {
             ProcessConfig leaderConfig = Arrays.stream(nodeConfigs).filter(ProcessConfig::isLeader).findAny().get();
             ProcessConfig[] clientConfigs = new ProcessConfigBuilder().fromFile(CLIENTCONFIGPATH);
             ProcessConfig clientConfig = Arrays.stream(clientConfigs).filter(c -> c.getId().equals(id)).findAny().get();
+            Float startBalance = clientConfig.getStartBalance();
 
             LOGGER.log(Level.INFO, MessageFormat.format("{0} - Running at {1}:{2}; is leader: {3}",
                     clientConfig.getId(), clientConfig.getHostname(), clientConfig.getPort(),
@@ -47,8 +50,11 @@ public class Client {
 
             link.addClient(clientConfigs);
 
+            wallet = new Wallet(clientConfig.getId(), startBalance, clientConfig.getPrivateKey(),
+                    clientConfig.getPublicKey());
+
             // Create a clientService for sending messages to nodes
-            ClientService clientService = new ClientService(link, clientConfig, leaderConfig, nodeConfigs);
+            ClientService clientService = new ClientService(link, clientConfig, leaderConfig, nodeConfigs, wallet);
             // Create a ClientMessageBuilder for creating the messages
             ClientMessageBuilder clientMessageBuilder = new ClientMessageBuilder(clientConfig);
             // Start a thread to listen for messages from nodes
@@ -59,20 +65,61 @@ public class Client {
             }).start();
 
             // Continuous loop to read user commands
+            System.out.println("Commands: \n"
+                    + "\ttransfer <amount> <destination> - Transfer amount to client with key destinationKey\n"
+                    + "\tbalance - Check your current balance\n"
+                    + "\tcheck <user> - Check balance of client with key userKey\n"
+                    + "\tquit - Exit the client application\n");
             while (true) {
                 System.out.print("Enter command: ");
                 String userCommand = scanner.nextLine().trim().toLowerCase();
                 switch (userCommand.split(" ")[0]) {
-                    case "append":
+                    case "transfer":
                         // Extract the payload from the user input
-                        String payload = userCommand.substring("append".length()).trim();
-                        ClientMessage appendMessage = clientMessageBuilder.buildMessage(payload, clientConfig.getId());
+                        String transferInput = userCommand.substring("transfer".length()).trim(); // String amount, dst
+                        String[] parts = transferInput.split(" ");
+                        if (parts.length != 2) {
+                            System.out.println(
+                                    "Invalid transfer command. Correct use: transfer <Int amount> <PublicKey destination>");
+                            break;
+                        }
+                        float amount = Float.parseFloat(parts[0]); // Throw exception if not float
+                        if (amount <= 0) {
+                            System.out.println("Amount must be a positive integer.");
+                            break;
+                        }
+                        if (amount > wallet.getBalance()) { // ! Consider removing, wallets easy to go out of sync
+                            System.out.println("Insufficient funds for this operation.");
+                            break;
+                        }
+                        String destinationKey = parts[1]; // Consider adding a check for valid public key
+                        ClientMessage transferMessage = clientMessageBuilder.buildMessage(transferInput,
+                                clientConfig.getId(), Message.Type.TRANSFER);
                         // Send the message to nodes
-                        clientService.sendClientMessage(appendMessage);
+                        clientService.clientTransfer(transferMessage);
+                        break;
+                    case "balance":
+                        ClientMessage selfBalanceRequest = clientMessageBuilder.buildMessage(wallet.getId(),
+                                clientConfig.getId(), Message.Type.BALANCE); // payload = dest public key
+                        clientService.checkBalance(selfBalanceRequest);
+
+                        break;
+                    case "check":
+                        System.out.println("Checking balance...");
+                        String userId = userCommand.substring("check".length()).trim(); // Uses client id
+                        ClientMessage balanceRequest = clientMessageBuilder.buildMessage(userId,
+                                clientConfig.getId(), Message.Type.BALANCE); // payload = dest public key
+                        clientService.checkBalance(balanceRequest);
                         break;
                     case "quit":
-                        // Handle other commands as needed
                         quitHandler();
+                        break;
+                    case "help":
+                        System.out.println("Commands: \n"
+                                + "\ttransfer <amount> <destination> - Transfer amount to client with key destinationKey\n"
+                                + "\tbalance - Check your current balance\n"
+                                + "\tcheck <user> - Check balance of client with key userKey\n"
+                                + "\tquit - Exit the client application\n");
                         break;
                     default:
                         System.out.println("Unknown command. Try again.");
@@ -86,7 +133,6 @@ public class Client {
     }
 
     private static void quitHandler() {
-        // Perform any cleanup or shutdown tasks before exiting
         System.out.println("Exiting the client application.");
         System.exit(0);
     }

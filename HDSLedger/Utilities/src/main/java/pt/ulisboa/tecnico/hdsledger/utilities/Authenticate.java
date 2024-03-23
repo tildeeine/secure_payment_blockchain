@@ -9,7 +9,8 @@ import java.security.Signature;
 
 public class Authenticate {
     // Method to sign a message
-    public static byte[] signMessage(PrivateKey privateKey, String message) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException {
+    public static byte[] signMessage(PrivateKey privateKey, String message)
+            throws NoSuchAlgorithmException, InvalidKeyException, SignatureException {
         Signature signature = Signature.getInstance("SHA256withRSA");
 
         signature.initSign(privateKey);
@@ -20,11 +21,12 @@ public class Authenticate {
     }
 
     // Method to verify a message
-    public static boolean verifyMessage(PublicKey publicKey, String message, byte[] signature) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException {
+    public static boolean verifyMessage(PublicKey publicKey, String payload, byte[] signature)
+            throws NoSuchAlgorithmException, InvalidKeyException, SignatureException {
         Signature signature_verify = Signature.getInstance("SHA256withRSA");
         signature_verify.initVerify(publicKey);
-        // Update the signature_verifynature object with the message
-        signature_verify.update(message.getBytes());
+        // Update the signature_verifynature object with the payloadd
+        signature_verify.update(payload.getBytes());
 
         return signature_verify.verify(signature);
     }

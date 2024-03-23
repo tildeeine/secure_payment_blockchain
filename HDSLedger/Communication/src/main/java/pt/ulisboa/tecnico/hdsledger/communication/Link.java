@@ -87,7 +87,7 @@ public class Link {
      * Broadcasts a message to all nodes in the network
      *
      * @param data The message to be broadcasted
-     */ 
+     */
     public void broadcast(Message data) {
         Gson gson = new Gson();
         nodes.forEach((destId, dest) -> send(destId, gson.fromJson(gson.toJson(data), data.getClass())));
@@ -133,20 +133,17 @@ public class Link {
                     return;
                 }
 
-                
-
                 for (;;) {
                     LOGGER.log(Level.INFO, MessageFormat.format(
                             "{0} - Sending {1} message to {2}:{3} with message ID {4} - Attempt #{5}", config.getId(),
                             data.getType(), destAddress, destPort, messageId, count++));
-
                     authenticatedSend(destAddress, destPort, data);
 
                     // Wait (using exponential back-off), then look for ACK
                     Thread.sleep(sleepTime);
 
                     // Receive method will set receivedAcks when sees corresponding ACK
-                    if (receivedAcks.contains(messageId))
+                    if (receivedAcks.contains(messageId)) // ! Is not necessarily the correct ACK, doesn't check type
                         break;
 
                     sleepTime <<= 1;
@@ -228,12 +225,11 @@ public class Link {
             } else {
                 return true;
             }
-         
+
         } catch (Exception e) {
             return false;
         }
     }
-
 
     /*
      * Receives a message from any node in the network (blocking)
@@ -243,7 +239,6 @@ public class Link {
         String serialized = "";
         Boolean local = false;
         DatagramPacket response = null;
-
 
         if (this.localhostQueue.size() > 0) {
             message = this.localhostQueue.poll();
@@ -258,11 +253,11 @@ public class Link {
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
 
             // Split message into message and signature
-            byte[] m = new byte[buffer.length-128];
+            byte[] m = new byte[buffer.length - 128];
             byte[] signature = new byte[128];
-            System.arraycopy(buffer, 0, m, 0, buffer.length-128);
-            System.arraycopy(buffer, buffer.length-128, signature, 0, 128);
-            
+            System.arraycopy(buffer, 0, m, 0, buffer.length - 128);
+            System.arraycopy(buffer, buffer.length - 128, signature, 0, 128);
+
             serialized = new String(m);
             message = new Gson().fromJson(serialized, Message.class);
 
@@ -275,10 +270,11 @@ public class Link {
         String senderId = message.getSenderId();
         int messageId = message.getMessageId();
 
-        if (!nodes.containsKey(senderId) && !senderId.contains("client"))
+        if (!nodes.containsKey(senderId) && !senderId.contains("client")) {
+            System.out.println("ID issue");
             throw new HDSSException(ErrorMessage.NoSuchNode);
-        
- 
+        }
+
         // Handle ACKS, since it's possible to receive multiple acks from the same
 
         // message
@@ -287,24 +283,26 @@ public class Link {
             return message;
         }
 
-        // Deserialize for the correct type
-        if (!local)
-            if (message.getType().equals(Message.Type.ROUND_CHANGE)) {
-                message = new Gson().fromJson(serialized, RoundChangeMessage.class);
-            }
-            else if (message.getType().equals(Message.Type.APPEND) || message.getType().equals(Message.Type.CLIENT_CONFIRMATION)){
-                message = new Gson().fromJson(serialized, ClientMessage.class);
-            }
-
-            else {
-                message = new Gson().fromJson(serialized, this.messageClass);
-            }
-
         boolean isRepeated = !receivedMessages.get(message.getSenderId()).add(messageId);
         Type originalType = message.getType();
         // Message already received (add returns false if already exists) => Discard
         if (isRepeated) {
             message.setType(Message.Type.IGNORE);
+        }
+
+        // Deserialize for the correct type
+        if (!local) {
+            if (message.getType().equals(Message.Type.ROUND_CHANGE)) {
+                message = new Gson().fromJson(serialized, RoundChangeMessage.class);
+            } else if (message.getType().equals(Message.Type.TRANSFER)
+                    || message.getType().equals(Message.Type.CLIENT_CONFIRMATION)
+                    || message.getType().equals(Message.Type.BALANCE)) {
+                message = new Gson().fromJson(serialized, ClientMessage.class);
+            } else if (message.getType().equals(Message.Type.BALANCE_RESPONSE)) {
+                message = new Gson().fromJson(serialized, BalanceMessage.class);
+            } else {
+                message = new Gson().fromJson(serialized, this.messageClass);
+            }
         }
 
         switch (message.getType()) {
@@ -333,12 +331,14 @@ public class Link {
                 ;
             }
 
-            default -> {}
+            default -> {
+            }
         }
 
         // Send ack
         if (!local) {
-            InetAddress address = InetAddress.getByName(response.getAddress().getHostAddress());
+            InetAddress address = InetAddress.getByName(config.getHostname()); // ! gave wrong address, changed for
+                                                                               // simplicity
             int port = response.getPort();
 
             Message responseMessage = new Message(this.config.getId(), Message.Type.ACK);
@@ -354,5 +354,15 @@ public class Link {
         }
 
         return message;
+    }
+
+    private volatile boolean running = true;
+
+    // Add shutdown method to allow for cleanup after tests
+    public void shutdown() {
+        running = false;
+        if (socket != null && !socket.isClosed()) {
+            socket.close();
+        }
     }
 }

@@ -10,7 +10,8 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 
 public class ProcessConfig {
-    public ProcessConfig() {}
+    public ProcessConfig() {
+    }
 
     private boolean isLeader;
 
@@ -19,6 +20,8 @@ public class ProcessConfig {
     private String id;
 
     private int port;
+
+    private float startBalance;
 
     public boolean isLeader() {
         return isLeader;
@@ -68,6 +71,9 @@ public class ProcessConfig {
         }
     }
 
+    public Float getStartBalance() {
+        return startBalance;
+    }
 
     // Read key bytes from file
     private byte[] readKey(String keyPath) throws IOException {

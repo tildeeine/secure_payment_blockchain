@@ -51,23 +51,13 @@ public class Node {
             this.nodeService = new NodeService(linkToNodes, nodeConfig, leaderConfig,
                     nodeConfigs);
 
+            nodeService.initialiseClientBalances(clientConfigs);
+
             if (nodeConfig.isLeader())
                 Thread.sleep(30000);
-            
-            
+
             nodeService.listen();
 
-            // ClientMessage message = new ClientMessage(nodeConfig.getId(), Message.Type.APPEND);
-            // ((ClientMessage) message).setValue("456");
-            // if (nodeConfig.getId().equals("3")) {
-            //     // for (int i = 0; i < 4; i++) {
-            //     Thread.sleep(500);
-            //     // String node = String.valueOf(i);
-            //     // nodeService.sendTestMessage(node, message);
-            //     // }
-
-            // }
-            
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -79,20 +69,9 @@ public class Node {
         nodesConfigPath += args[1];
 
         Node node = new Node(id, nodesConfigPath, clientsConfigPath);
-        node.start();
-    }
-
-    public void start() {
-        nodeService.listen();
     }
 
     public void sendTestMessage(String recipientId, Message message) {
         nodeService.sendTestMessage(recipientId, message);
     }
 }
-
-
-    
-    
-        
-    

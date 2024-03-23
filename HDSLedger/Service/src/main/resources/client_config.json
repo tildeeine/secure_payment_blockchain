@@ -1,20 +1,20 @@
 [
     {
         "id": "client1",
-        "isleader": false,
         "hostname": "localhost",
-        "port": 3005
+        "port": 3005,
+        "startBalance": 100
     },
     {
         "id": "client2",
-        "isleader": false,
         "hostname": "localhost",
-        "port": 3006
+        "port": 3006,
+        "startBalance": 100
     },
     {
         "id": "client3",
-        "isleader": false,
         "hostname": "localhost",
-        "port": 3007
+        "port": 3007,
+        "startBalance": 100
     }
 ]
