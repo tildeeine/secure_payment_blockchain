@@ -26,9 +26,6 @@ public class ClientService implements UDPServiceClient {
     private final ProcessConfig[] nodesConfig;
     // Current node is leader
     private final ProcessConfig config;
-    // Keep track of balance responses to request IDs
-    Map<Integer, Map<Float, Integer>> balanceTracker = new HashMap<>();
-
     // Link to communicate with nodes
     private final Link link;
 
@@ -41,7 +38,9 @@ public class ClientService implements UDPServiceClient {
     private Wallet wallet;
 
     // < requestID, confirmationMessage count>
-    private Map<Integer, Integer> requestTracker = new ConcurrentHashMap<>();
+    private Map<Integer, Integer> transferRequestTracker = new ConcurrentHashMap<>();
+    // Keep track of balance responses to request IDs
+    private Map<Integer, Map<Float, Integer>> balanceRequestTracker = new HashMap<>();
 
     public ClientService(Link link, ProcessConfig config,
             ProcessConfig leaderConfig, ProcessConfig[] nodesConfig, Wallet wallet) {
@@ -65,7 +64,7 @@ public class ClientService implements UDPServiceClient {
         // Create message with balance request
         System.out.println("request id" + balanceRequest.getClientData().getRequestID());// !
         String userKey = balanceRequest.getClientData().getValue();
-        this.balanceTracker.put(balanceRequest.getClientData().getRequestID(), new ConcurrentHashMap<>());
+        this.balanceRequestTracker.put(balanceRequest.getClientData().getRequestID(), new ConcurrentHashMap<>());
         link.broadcast(balanceRequest);
     }
 
@@ -80,10 +79,10 @@ public class ClientService implements UDPServiceClient {
             return;
         }
         // Update the balance
-        if (!balanceTracker.containsKey(requestID)) {
+        if (!balanceRequestTracker.containsKey(requestID)) {
             return;
         }
-        Map<Float, Integer> balances = balanceTracker.get(requestID);
+        Map<Float, Integer> balances = balanceRequestTracker.get(requestID);
 
         // Get count, increment, and replace
         int newCount = balances.getOrDefault(balance, 0) + 1;
@@ -99,7 +98,7 @@ public class ClientService implements UDPServiceClient {
             } else {
                 System.out.println("Client " + requestedClient + " balance is: " + balance);
             }
-            balanceTracker.remove(requestID); // To not process redundant value responses
+            balanceRequestTracker.remove(requestID); // To not process redundant value responses
         }
     }
 
@@ -137,11 +136,11 @@ public class ClientService implements UDPServiceClient {
         if (!clientID.equals(this.config.getId())) {
             return;
         }
-        // Check if request id is in requestTracker map.
+        // Check if request id is in transferRequestTracker map.
         // Increment value with one
         if (requestTracker.containsKey(requestID)) {
-            int count = requestTracker.getOrDefault(requestID, 0) + 1;
-            requestTracker.put(requestID, count);
+            int count = transferRequestTracker.getOrDefault(requestID, 0) + 1;
+            transferRequestTracker.put(requestID, count);
             if (count == this.allowedFaults + 1) {
                 LOGGER.log(Level.INFO, MessageFormat.format(
                         "{0} - Recieved {1} valid confirmations on transaction. Transaction appended to blockchain.",

@@ -27,6 +27,7 @@ public class ClientMessageBuilder {
         ClientData clientData = new ClientData();
         clientData.setClientID(senderID);
         clientData.setRequestID(this.clientRequest.getAndIncrement());
+        payload += " " + clientData.getRequestID(); // Sign request ID to work as nonce
 
         try {
             byte[] signature = Authenticate.signMessage(this.privateKey, payload);
