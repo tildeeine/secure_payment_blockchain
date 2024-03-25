@@ -1,21 +1,27 @@
 package pt.ulisboa.tecnico.hdsledger.service.blockchain;
 
+import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
 
 import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
 
-public class Block {
+public class Block implements Serializable{
     
+    private final int BLOCK_ID;
     private String prevHash;
     private List<ClientData> transactions;
     private final int maxTransactions;
 
-    public Block() {
+    public Block(int BLOCK_ID) {
         this.transactions = new ArrayList<>();
+        this.BLOCK_ID = BLOCK_ID;
         this.maxTransactions = 5;
     }
+
+    
 
     public void setPrevHash(String prevHash){
         this.prevHash = prevHash;
@@ -52,8 +58,31 @@ public class Block {
     }
 
     // Method to remove a specific instance of ClientData from the list of transactions
-    public boolean removeTransaction(ClientData transaction) {
-        return transactions.remove(transaction);
+    public void removeTransaction(ClientData transaction) {
+        if (this.transactions.contains(transaction)){
+            transactions.remove(transaction);
+        }
+        else{
+            System.out.println("Can't remove non existant transaction from block.");
+        }
+    }
+
+    // Method to sort transactions by request ID and client ID
+    public void sortTransactions() {
+        transactions.sort(Comparator.comparing(ClientData::getRequestID)
+                                    .thenComparing(ClientData::getClientID));
+    }
+
+
+
+    public int getBLOCK_ID() {
+        return BLOCK_ID;
+    }
+
+
+
+    public int getMaxTransactions() {
+        return maxTransactions;
     }
     
 }

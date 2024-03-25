@@ -1,7 +1,8 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
+import java.io.Serializable;
 
-public class ClientData {
+public class ClientData implements Serializable{
     
     private String value;
 

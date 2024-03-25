@@ -2,6 +2,7 @@ package pt.ulisboa.tecnico.hdsledger.service.blockchain;
 
 import java.util.ArrayList;
 import java.util.List;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
@@ -16,7 +17,7 @@ public class Blockchain {
     public Blockchain() {
         this.blocks = new ArrayList<>();
         // Genesis block (initial block)
-        Block genesisBlock = new Block();
+        Block genesisBlock = new Block(0);
         this.blocks.add(genesisBlock);
     }
 

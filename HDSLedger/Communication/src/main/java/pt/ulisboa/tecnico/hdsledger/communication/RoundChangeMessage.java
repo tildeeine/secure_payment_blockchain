@@ -1,6 +1,5 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
-import pt.ulisboa.tecnico.hdsledger.service.blockchain.Block;
 import java.util.HashSet;
 
 import com.google.gson.Gson;
@@ -15,16 +14,16 @@ public class RoundChangeMessage extends Message {
     private int prepared_round;
 
     //private String prepared_value;
-    private Block preparedBlock;
+    private String preparedValue;
 
     private HashSet<ConsensusMessage> prepareMessages;
     
-    public RoundChangeMessage(String senderId, Type type, int consensusInstance, int round, int prepared_round, Block preparedBlock) {
+    public RoundChangeMessage(String senderId, Type type, int consensusInstance, int round, int prepared_round, String preparedValue) {
         super(senderId, type);
         this.consensusInstance = consensusInstance;
         this.round = round;
         this.prepared_round = prepared_round;
-        this.preparedBlock = preparedBlock;
+        this.preparedValue = preparedValue;
         this.prepareMessages = new HashSet<>();
     }
 
@@ -61,12 +60,12 @@ public class RoundChangeMessage extends Message {
     }
 
     // Getter and setter for prepared_value
-    public Block getPreparedBlock() {
-        return this.preparedBlock;
+    public String getPreparedValue() {
+        return this.preparedValue;
     }
 
-    public void setPreparedValue(Block preparedBlock) {
-        this.preparedBlock = preparedBlock;
+    public void setPreparedValue(String preparedValue) {
+        this.preparedValue = preparedValue;
     }
 
     public String toJson() {

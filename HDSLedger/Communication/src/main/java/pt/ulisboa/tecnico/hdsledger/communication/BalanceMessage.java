@@ -2,7 +2,6 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 
 import com.google.gson.Gson;
 
-import pt.ulisboa.tecnico.hdsledger.communication.Message;
 
 public class BalanceMessage extends Message {
 

@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
 import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
@@ -46,7 +45,7 @@ public class MessageBucket {
         
         bucket.get(instance).get(round).values().forEach((message) -> {
             PrepareMessage prepareMessage = message.deserializePrepareMessage();
-            String value = prepareMessage.getClientData().getValue();
+            String value = prepareMessage.getValue();
             frequency.put(value, frequency.getOrDefault(value, 0) + 1);
         });
 
@@ -65,7 +64,7 @@ public class MessageBucket {
         HashMap<String, Integer> frequency = new HashMap<>();
         bucket.get(instance).get(round).values().forEach((message) -> {
             CommitMessage commitMessage = message.deserializeCommitMessage();
-            String value = commitMessage.getClientData().getValue();
+            String value = commitMessage.getValue();
             frequency.put(value, frequency.getOrDefault(value, 0) + 1);
         });
 
