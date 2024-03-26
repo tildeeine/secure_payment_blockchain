@@ -9,6 +9,7 @@ import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -72,6 +73,8 @@ public class NodeService implements UDPService {
     // private final ByzantineBucket roundChangeMessages;
     private final HashSet<RoundChangeMessage> roundChangeMessages;
 
+    private Map<Integer, String> commitedValues; 
+
     // Store if already received pre-prepare for a given <consensus, round>
     private final Map<Integer, Map<Integer, Boolean>> receivedPrePrepare = new ConcurrentHashMap<>();
     // Consensus instance information per consensus instance
@@ -125,6 +128,8 @@ public class NodeService implements UDPService {
         this.prepareMessages = new MessageBucket(nodesConfig.length);
         this.commitMessages = new MessageBucket(nodesConfig.length);
         this.roundChangeMessages = new HashSet<RoundChangeMessage>();
+        
+        this.commitedValues = new HashMap<Integer, String>();
 
         this.timeout = 5000;
 
@@ -259,10 +264,10 @@ public class NodeService implements UDPService {
                         "{0} - Received ROUND_CHANGE message from {1} Consensus Instance {2}, Round {3}",
                         config.getId(), message.getSenderId(), message.getConsensusInstance(), message.getRound()));
 
-        if (message.getPreparedValue() != null) {
-            System.out.println("RoundChangeMessage is not valid");
-            return;
-        }
+        // if (message.getPreparedValue() != null) {
+        //     System.out.println("RoundChangeMessage is not valid");
+        //     return;
+        // }
 
         roundChangeMessages.add(message);
 
@@ -317,6 +322,22 @@ public class NodeService implements UDPService {
             startTimer();
 
             sendRoundChangeMessage(newRound);
+        }
+
+        // Send commit message if already commited the value
+        String val = commitedValues.get(message.getConsensusInstance());
+        if (val != null) {
+            CommitMessage c = new CommitMessage(val);
+            
+            ConsensusMessage m = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
+                    .setConsensusInstance(message.getConsensusInstance())
+                    .setRound(message.getRound())
+                    .setReplyTo(message.getSenderId())
+                    .setReplyToMessageId(message.getMessageId())
+                    .setMessage(c.toJson())
+                    .build();
+
+                link.send(message.getSenderId(), m);
         }
     }
 
@@ -769,6 +790,8 @@ public class NodeService implements UDPService {
         Optional<String> commitValue = commitMessages.hasValidCommitQuorum(config.getId(),
                 consensusInstance, round);
 
+        System.out.println("Checking COMMIT message");
+
         if (commitValue.isPresent() && instance.getCommittedRound() < round) {
             System.out.println("Value to commit: " + commitValue.get());
             Optional<ConsensusMessage> prepMessage = this.commitMessages.getMessages(consensusInstance, round).values()
@@ -791,6 +814,7 @@ public class NodeService implements UDPService {
             // Check if block excist locally. Otherwise, wait for it
             while (!blockNumberToBlockMapping.containsKey(this.nextBlock)){
                 System.out.println("Block is not up next, wait for synchronization");
+                System.out.println(this.nextBlock);
                 try {
                     Thread.sleep(500);
                 } catch (InterruptedException e) {
@@ -805,6 +829,7 @@ public class NodeService implements UDPService {
                     localBlockHash = Blockchain.calculateHash(blockToBeExecuted);
                     if (commitedBlockHash.equals(localBlockHash))
                         this.blockchain.addBlock(blockToBeExecuted);
+                        this.commitedValues.put(localConsensusInstance, localBlockHash);
                 } catch (NoSuchAlgorithmException | IOException e) {
                     e.printStackTrace();
                     System.out.println("Something wrong happened while appending block");
@@ -828,8 +853,6 @@ public class NodeService implements UDPService {
             this.blockNumberToBlockMapping.remove(nextBlock);           
             
             nextBlock = nextBlock + 1;
-
-
         }
     }
 
