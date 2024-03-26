@@ -73,7 +73,7 @@ public class NodeService implements UDPService {
     // private final ByzantineBucket roundChangeMessages;
     private final HashSet<RoundChangeMessage> roundChangeMessages;
 
-    private Map<Integer, String> commitedValues; 
+    private Map<Integer, String> commitedValues;
 
     // Store if already received pre-prepare for a given <consensus, round>
     private final Map<Integer, Map<Integer, Boolean>> receivedPrePrepare = new ConcurrentHashMap<>();
@@ -116,7 +116,6 @@ public class NodeService implements UDPService {
 
     private Map<Integer, Block> blockNumberToBlockMapping = new ConcurrentHashMap<>();
 
-
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig leaderConfig, ProcessConfig[] nodesConfig) {
 
@@ -128,7 +127,7 @@ public class NodeService implements UDPService {
         this.prepareMessages = new MessageBucket(nodesConfig.length);
         this.commitMessages = new MessageBucket(nodesConfig.length);
         this.roundChangeMessages = new HashSet<RoundChangeMessage>();
-        
+
         this.commitedValues = new HashMap<Integer, String>();
 
         this.timeout = 5000;
@@ -179,6 +178,10 @@ public class NodeService implements UDPService {
         return this.leaderConfig.getId().equals(id);
     }
 
+    public Blockchain getBlockchain() {
+        return this.blockchain;
+    }
+
     public ConsensusMessage createConsensusMessage(String blockHash, int instance, int round) {
         PrePrepareMessage prePrepareMessage = new PrePrepareMessage(blockHash);
 
@@ -204,7 +207,6 @@ public class NodeService implements UDPService {
             }
         }
     }
-
 
     public void sendRoundChangeMessage(int round) {
         int localConsensusInstance = this.consensusInstance.get();
@@ -265,8 +267,8 @@ public class NodeService implements UDPService {
                         config.getId(), message.getSenderId(), message.getConsensusInstance(), message.getRound()));
 
         // if (message.getPreparedValue() != null) {
-        //     System.out.println("RoundChangeMessage is not valid");
-        //     return;
+        // System.out.println("RoundChangeMessage is not valid");
+        // return;
         // }
 
         roundChangeMessages.add(message);
@@ -298,7 +300,8 @@ public class NodeService implements UDPService {
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
 
-            this.link.broadcast(this.createConsensusMessage(blockHash, localConsensusInstance, instance.getCurrentRound()));
+            this.link.broadcast(
+                    this.createConsensusMessage(blockHash, localConsensusInstance, instance.getCurrentRound()));
 
             startTimer();
         }
@@ -328,7 +331,7 @@ public class NodeService implements UDPService {
         String val = commitedValues.get(message.getConsensusInstance());
         if (val != null) {
             CommitMessage c = new CommitMessage(val);
-            
+
             ConsensusMessage m = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
                     .setConsensusInstance(message.getConsensusInstance())
                     .setRound(message.getRound())
@@ -337,7 +340,7 @@ public class NodeService implements UDPService {
                     .setMessage(c.toJson())
                     .build();
 
-                link.send(message.getSenderId(), m);
+            link.send(message.getSenderId(), m);
         }
     }
 
@@ -455,19 +458,18 @@ public class NodeService implements UDPService {
 
         // Create new block
         Block block = this.blockCreator();
-        
 
         synchronized (block) {
             Iterator<ClientData> iterator = block.getTransactions().iterator();
             while (iterator.hasNext()) {
                 ClientData transaction = iterator.next();
                 if (!authorizeClientTransaction(transaction)) {
-                    iterator.remove(); 
+                    iterator.remove();
                 }
             }
         }
 
-        // Needs to be cleared before next block. 
+        // Needs to be cleared before next block.
         this.currencyUsedInBlock.clear();
 
         this.blockNumberToBlockMapping.put(block.getBLOCK_ID(), block);
@@ -536,19 +538,20 @@ public class NodeService implements UDPService {
         String destination = transferContent[1];
         String requestID = transferContent[2];
         String source = transactionData.getClientID();
-        
+
         if (clientBalances.getOrDefault(source, 0.0f) < amount) {
             System.out.println("Client does not have enough balance to send the amount");
             return false;
         }
 
-        // Check that the transaction together with other transactions lead to overspending. 
-        if (this.currencyUsedInBlock.containsKey(clientId) && amount + this.currencyUsedInBlock.get(clientId) > this.clientBalances.get(clientId)){
-            System.out.println("Client does not have enough balance to send the amount and other transaction(s) in this block");
+        // Check that the transaction together with other transactions lead to
+        // overspending.
+        if (this.currencyUsedInBlock.containsKey(clientId)
+                && amount + this.currencyUsedInBlock.get(clientId) > this.clientBalances.get(clientId)) {
+            System.out.println(
+                    "Client does not have enough balance to send the amount and other transaction(s) in this block");
             return false;
         }
-
-
 
         // Check that destination is a valid client, meaning is in the clientBalances
         if (!clientBalances.containsKey(destination)) {
@@ -666,7 +669,6 @@ public class NodeService implements UDPService {
                         "{0} - Received PREPARE message from {1}: Consensus Instance {2}, Round {3}",
                         config.getId(), senderId, consensusInstance, round));
 
-
         // Doesn't add duplicate messages
         prepareMessages.addMessage(message);
 
@@ -761,7 +763,6 @@ public class NodeService implements UDPService {
                 MessageFormat.format("{0} - Received COMMIT message from {1}: Consensus Instance {2}, Round {3}",
                         config.getId(), message.getSenderId(), consensusInstance, round));
 
-
         commitMessages.addMessage(message);
 
         instance = this.instanceInfo.get(consensusInstance);
@@ -809,10 +810,9 @@ public class NodeService implements UDPService {
             cancelTimer();
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
-            
 
             // Check if block excist locally. Otherwise, wait for it
-            while (!blockNumberToBlockMapping.containsKey(this.nextBlock)){
+            while (!blockNumberToBlockMapping.containsKey(this.nextBlock)) {
                 System.out.println("Block is not up next, wait for synchronization");
                 System.out.println(this.nextBlock);
                 try {
@@ -823,21 +823,19 @@ public class NodeService implements UDPService {
             }
 
             Block blockToBeExecuted = this.blockNumberToBlockMapping.get(this.nextBlock);
-            synchronized (this.blockchain){
+            synchronized (this.blockchain) {
                 String localBlockHash;
                 try {
                     localBlockHash = Blockchain.calculateHash(blockToBeExecuted);
                     if (commitedBlockHash.equals(localBlockHash))
                         this.blockchain.addBlock(blockToBeExecuted);
-                        this.commitedValues.put(localConsensusInstance, localBlockHash);
+                    this.commitedValues.put(localConsensusInstance, localBlockHash);
                 } catch (NoSuchAlgorithmException | IOException e) {
                     e.printStackTrace();
                     System.out.println("Something wrong happened while appending block");
                     return;
                 }
             }
-
-
 
             lastDecidedConsensusInstance.getAndIncrement();
 
@@ -846,19 +844,19 @@ public class NodeService implements UDPService {
                             "{0} - Decided on Consensus Instance {1}, Round {2}, Successful? {3}",
                             config.getId(), consensusInstance, round, true));
 
+            blockToBeExecuted.forEachTransaction(transaction -> {
+                executeTransaction(transaction);
+            });
 
-            blockToBeExecuted.forEachTransaction(transaction -> {executeTransaction(transaction);});
-            
             // Remove to avoid unneccessary overhead
-            this.blockNumberToBlockMapping.remove(nextBlock);           
-            
+            this.blockNumberToBlockMapping.remove(nextBlock);
+
             nextBlock = nextBlock + 1;
         }
     }
 
+    public void executeTransaction(ClientData transaction) {
 
-    public void executeTransaction(ClientData transaction){
-    
         // TODO could add message for receiver to notify that received money. Would need
         // to get quorum for this.
 
@@ -913,10 +911,10 @@ public class NodeService implements UDPService {
         this.transactionQueue.offer(transferData);
     }
 
-    private Block blockCreator(){
-        
+    private Block blockCreator() {
+
         Block block = new Block(this.blockNumber.getAndIncrement());
-        
+
         String prevHash;
 
         try {
@@ -927,10 +925,10 @@ public class NodeService implements UDPService {
         }
 
         // Put all waiting transactions into block or till it's full
-        while (this.transactionQueue.peek() != null || !block.isFull()){
+        while (this.transactionQueue.peek() != null || !block.isFull()) {
             block.addTransaction(this.transactionQueue.poll());
         }
-        
+
         return block;
 
     }
@@ -942,7 +940,6 @@ public class NodeService implements UDPService {
         }
 
         clientRequestQueue.offer(clientData);
-        
 
         // Get the local balance of the id that the client is requesting
         String balanceUser = clientData.getValue().split(" ")[0];
@@ -981,59 +978,62 @@ public class NodeService implements UDPService {
         int initialDelayInSeconds = 15; // Wait 15 seconds before the first consensus
         int intervalInSeconds = 15; // Consensus every 15 seconds
         System.out.println("Consensus timer expired. Start consensus");
-        scheduler.scheduleWithFixedDelay(() -> startConsensus(), initialDelayInSeconds, intervalInSeconds, TimeUnit.SECONDS);
-    }
+        scheduler.scheduleWithFixedDelay(() -> startConsensus(), initialDelayInSeconds, intervalInSeconds,
+                TimeUnit.SECONDS);
+        
+            
 
-    @Override
-    public void listen() {
-        try {
-            // Thread to listen on every request
-            new Thread(() -> {
-                try {
-                    System.out.println(
-                            "Listening on " + InetAddress.getLocalHost().getHostAddress() + ":" + config.getPort());
-                    // remove
-                    while (true) {
-                        Message message = link.receive();
+         {
+        
 
-                        // non verified messages
-                        if (message == null)
-                            return;
+             {
 
-                        // Separate thread to handle each message
-                        new Thread(() -> {
+                rintln(
+                    ng on " + InetAddress.getLocalHost().get
 
-                            switch (message.getType()) {
+                 {
+                    age = link.receive();
 
-                                case TRANSFER ->
-                                    handleTransfer((ClientMessage) message);
+                erified messages
+                    == null)
 
-                                case BALANCE ->
-                                    handleBalanceRequest((ClientMessage) message);
+                
+                    thread to handle each message
 
-                                case PRE_PREPARE ->
-                                    uponPrePrepare((ConsensusMessage) message);
+                
+                    message.getType()) {
 
-                                case PREPARE ->
-                                    uponPrepare((ConsensusMessage) message);
+                case TRANSFER ->
+                    handleTransfer((ClientMessage) message);
 
-                                case COMMIT ->
-                                    uponCommit((ConsensusMessage) message);
+                case BALANC
+                    handleBalanceRequest((ClientMessage) message);
+                            
 
-                                case ROUND_CHANGE ->
-                                    uponRoundChange((RoundChangeMessage) message);
+                    uponPrePre
+                    
+                             ->
+                                    sensusMessage) message);
 
-                                case ACK ->
-                                    LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received ACK message from {1}",
-                                            config.getId(), message.getSenderId()));
+                case COMMI
+                    uponCommit((ConsensusM
+                            
+                                    
 
+            
+
+                   
+     
+
+    
+    
                                 case IGNORE ->
-                                    LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Received IGNORE message from {1}",
-                                                    config.getId(), message.getSenderId()));
+                                   
+                
+                          config.getId(), message.getSenderId()));
 
-                                default ->
-                                    LOGGER.log(Level.INFO,
+         
+                                LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received unknown message from {1}",
                                                     config.getId(), message.getSenderId()));
 

@@ -4,7 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.mockito.Mock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +26,7 @@ import java.util.Arrays;
 import java.security.PrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.KeyFactory;
+import java.beans.Transient;
 import java.io.FileInputStream;
 import java.io.IOException;
 
@@ -44,16 +45,12 @@ import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.RoundChangeMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.Authenticate;
+import pt.ulisboa.tecnico.hdsledger.service.blockchain.Block;
+import pt.ulisboa.tecnico.hdsledger.service.blockchain.Blockchain;
 
 @ExtendWith(MockitoExtension.class)
 class NodeServiceNormalTest {
     // Class to test normal functioning of NodeService
-
-    // Current strategy: Use mockito to mock the network communication for the most
-    // basic tests, like testing that the correct message is sent at the correct
-    // time.
-    // Use Junit5 to test the more overall system logic, not small components, like
-    // checking that the correct consensus is reached
 
     private TestableNodeService nodeService;
 
@@ -151,6 +148,32 @@ class NodeServiceNormalTest {
         return clientData;
     }
 
+    // Test that the transactions are added to a block in the blockchain of the
+    // service
+    // ! Not tested
+    @Test
+    void testAddTransactionToBlock() {
+        System.out.println("Add transaction to block...");
+        // Create two valid transactions to add to the block
+        ClientData clientData1 = setupClientData("10 client1 1");
+        ClientData clientData2 = setupClientData("20 client2 2");
+
+        // Make clientmessages from the clientdata
+        ClientMessage clientMessage1 = new ClientMessage("client2", Message.Type.TRANSFER);
+        ClientMessage clientMessage2 = new ClientMessage("client1", Message.Type.TRANSFER);
+        clientMessage1.setClientData(clientData1);
+        clientMessage2.setClientData(clientData2);
+
+        // Add transactions to the block
+        nodeService.handleTransfer(clientMessage1);
+        nodeService.handleTransfer(clientMessage2);
+
+        // Assert that the block contains the transactions
+        Block latestBlock = nodeService.getBlockchain().getLatestBlock();
+        assertTrue(latestBlock.getTransactions().contains(clientData1));
+        assertTrue(latestBlock.getTransactions().contains(clientData2));
+    }
+
     // Test that the correct updateLeader is done
     // Desired result: Next leader is r mod N -> r = current leader + 1 (node)
     @Test
@@ -159,6 +182,7 @@ class NodeServiceNormalTest {
         // Test setup: Ensure an InstanceInfo exists for the current consensus instance
         int initialConsensusInstance = nodeService.getConsensusInstance().get();
 
+        // ! now takes in a string of the past hashed block
         InstanceInfo initialInstanceInfo = new InstanceInfo(mockClientData);
         initialInstanceInfo.setCurrentRound(1); // Assuming the initial round starts at 1
         nodeService.getInstanceInfo().put(initialConsensusInstance, initialInstanceInfo);
@@ -182,7 +206,7 @@ class NodeServiceNormalTest {
     // messages
     @Test
     void testCommitOnValidQuorum() {
-        System.out.println("COmmit on valid quorum...");
+        System.out.println("Commit on valid quorum...");
         // Test setup
         // Make enough prepare messages to reach quorum (2f+1)
         // Get number of nodes and calculate quorum
@@ -196,10 +220,12 @@ class NodeServiceNormalTest {
         // Set values for the prepare message
         int consensusInstance = nodeService.getConsensusInstance().get();
         int round = 1;
+
+        // ! now takes in a string of the past hashed block
         PrepareMessage prepareMessage = new PrepareMessage(clientData);
         String senderMessageId = "1";
 
-        nodeService.startConsensus(clientData);
+        nodeService.startConsensus();
 
         // Make and send enough prepare messages to reach quorum (2f+1)
         for (int i = 0; i < quorum; i++) {
@@ -233,10 +259,11 @@ class NodeServiceNormalTest {
         // Set values for the prepare message
         int consensusInstance = nodeService.getConsensusInstance().get();
         int round = 1;
+        // ! now takes in a string of the past hashed block
         PrepareMessage prepareMessage = new PrepareMessage(clientData);
         String senderMessageId = "1";
 
-        nodeService.startConsensus(clientData);
+        nodeService.startConsensus();
 
         // Make and send f prepare messages
         for (int i = 0; i < f; i++) {
@@ -270,10 +297,11 @@ class NodeServiceNormalTest {
         // Send quorum of prepare messages with unsigned client data
         int consensusInstance = nodeService.getConsensusInstance().get();
         int round = 1;
+        // ! now takes in a string of the past hashed block
         PrepareMessage prepareMessage = new PrepareMessage(clientData);
         int quorum = 3 * ((nodeConfigs.length - 1) / 3) + 1;
 
-        nodeService.startConsensus(clientData);
+        nodeService.startConsensus();
 
         for (int i = 0; i < quorum; i++) {
             // Create prepare message
@@ -293,10 +321,11 @@ class NodeServiceNormalTest {
 
     // Test that commit messages that have quorum add value to ledger
     @Test
-    void testCommitAddsValueToLedger() {
+    void testCommitAddsValueToBlockchain() {
         System.out.println("Commit adds value to ledger...");
         // Get ledger length before commit
-        int ledgerLengthBefore = nodeService.getLedger().size();
+        // ! has been replaced with getblockchain
+        int ledgerLengthBefore = nodeService.getBlockchain().getLength();// !
 
         // Set up client data
         ClientData clientData = setupClientData("20 client2 2");
@@ -304,6 +333,7 @@ class NodeServiceNormalTest {
         // Test setup: Ensure an InstanceInfo exists for the current consensus instance
         int initialConsensusInstance = nodeService.getConsensusInstance().get();
 
+        // ! now takes in a string of the past hashed block
         InstanceInfo initialInstanceInfo = new InstanceInfo(mockClientData);
         initialInstanceInfo.setCurrentRound(1); // Assuming the initial round starts at 1
         nodeService.getInstanceInfo().put(initialConsensusInstance, initialInstanceInfo);
@@ -311,6 +341,7 @@ class NodeServiceNormalTest {
         // Send quorum of prepare messages
         int consensusInstance = nodeService.getConsensusInstance().get();
         int round = 1;
+        // ! now takes in a string of the past hashed block
         CommitMessage commitMessage = new CommitMessage(clientData);
         int f = Math.floorDiv(nodeConfigs.length - 1, 3);
         int quorum = Math.floorDiv(nodeConfigs.length + f, 2) + 1;
@@ -327,15 +358,17 @@ class NodeServiceNormalTest {
         }
 
         // Assert nodeService.getLedger()
-        assertEquals(ledgerLengthBefore + 1, nodeService.getLedger().size());
-        assertEquals(clientData.getValue(), nodeService.getLedger().get(ledgerLengthBefore));
+        assertEquals(ledgerLengthBefore + 1, nodeService.getBlockchain().getLength());
+        assertEquals(clientData.getValue(),
+                nodeService.getBlockchain().getLatestBlock().getTransactions().get(0).getValue()); // ! not sure if will
+                                                                                                   // work
     }
 
     // Test that commit messages that do not have quorum do not add value to ledger.
     @Test
     void testNoCommitNoValueToLedger() {
         // Get ledger length before commit
-        int ledgerLengthBefore = nodeService.getLedger().size();
+        int ledgerLengthBefore = nodeService.getBlockchain().getLength();
 
         // Set up client data
         ClientData clientData = setupClientData("Test");
@@ -343,6 +376,7 @@ class NodeServiceNormalTest {
         // Send f commit messages
         int consensusInstance = nodeService.getConsensusInstance().get();
         int round = 1;
+        // ! now takes in a string of the past hashed block
         CommitMessage commitMessage = new CommitMessage(clientData);
         int f = (nodeConfigs.length - 1) / 3;
 
@@ -358,7 +392,7 @@ class NodeServiceNormalTest {
         }
 
         // Assert nodeService.getLedger()
-        assertEquals(ledgerLengthBefore, nodeService.getLedger().size()); // Ledger should not have changed
+        assertEquals(ledgerLengthBefore, nodeService.getBlockchain().getLength()); // Ledger should not have changed
     }
 
     // Test a byzantine leader sending malformed proposals. Honest nodes should not
@@ -392,4 +426,46 @@ class NodeServiceNormalTest {
         // Test
     }
 
+    @Test
+    void testConsensusOnBlock() {
+        // This test should simulate the consensus process for a block
+        // and verify that the agreed-upon block is added to the blockchain.
+        // This involves mocking or simulating the receipt of consensus messages
+        // and ensuring that the block that emerges from consensus matches expectations.
+    }
+
+    @Test
+    void testBalanceUpdateAfterBlockAddition() {
+        // Setup transactions that will affect balances
+        // Process these transactions into a block and add the block to the blockchain
+        // Verify that the balances of the involved clients have been updated correctly
+    }
+
+    @Test
+    void testBlockVerification() {
+        // Test that a block can be verified correctly
+        // Create a block and verify it
+        // Create a block with an incorrect hash and verify it
+    }
+
+    @Test
+    void testBlockSerialization() {
+        // Test that a block can be serialized and deserialized correctly
+        // Create a block, serialize it, and then deserialize it
+        // Verify that the deserialized block is the same as the original block
+    }
+
+    @Test
+    void testBlockHashCalculation() {
+        // Test that the hash of a block can be calculated correctly
+        // Create a block and calculate its hash
+        // Verify that the calculated hash is correct
+    }
+
+    @Test
+    void testNonceVerification() {
+        // Test that a nonce can be verified correctly
+        // Create a block and verify its nonce
+        // Create a block with an incorrect nonce and verify it
+    }
 }
