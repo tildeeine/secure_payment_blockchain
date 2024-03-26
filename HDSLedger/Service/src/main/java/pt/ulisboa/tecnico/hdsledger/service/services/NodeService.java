@@ -178,10 +178,6 @@ public class NodeService implements UDPService {
         return this.leaderConfig.getId().equals(id);
     }
 
-    public Blockchain getBlockchain() {
-        return this.blockchain;
-    }
-
     public ConsensusMessage createConsensusMessage(String blockHash, int instance, int round) {
         PrePrepareMessage prePrepareMessage = new PrePrepareMessage(blockHash);
 
@@ -980,60 +976,58 @@ public class NodeService implements UDPService {
         System.out.println("Consensus timer expired. Start consensus");
         scheduler.scheduleWithFixedDelay(() -> startConsensus(), initialDelayInSeconds, intervalInSeconds,
                 TimeUnit.SECONDS);
-        
-            
+    }
 
-         {
-        
+    @Override
+    public void listen() {
+        try {
+            // Thread to listen on every request
+            new Thread(() -> {
+                try {
+                    System.out.println(
+                            "Listening on " + InetAddress.getLocalHost().getHostAddress() + ":" + config.getPort());
+                    // remove
+                    while (true) {
+                        Message message = link.receive();
 
-             {
+                        // non verified messages
+                        if (message == null)
+                            return;
 
-                rintln(
-                    ng on " + InetAddress.getLocalHost().get
+                        // Separate thread to handle each message
+                        new Thread(() -> {
 
-                 {
-                    age = link.receive();
+                            switch (message.getType()) {
 
-                erified messages
-                    == null)
+                                case TRANSFER ->
+                                    handleTransfer((ClientMessage) message);
 
-                
-                    thread to handle each message
+                                case BALANCE ->
+                                    handleBalanceRequest((ClientMessage) message);
 
-                
-                    message.getType()) {
+                                case PRE_PREPARE ->
+                                    uponPrePrepare((ConsensusMessage) message);
 
-                case TRANSFER ->
-                    handleTransfer((ClientMessage) message);
+                                case PREPARE ->
+                                    uponPrepare((ConsensusMessage) message);
 
-                case BALANC
-                    handleBalanceRequest((ClientMessage) message);
-                            
+                                case COMMIT ->
+                                    uponCommit((ConsensusMessage) message);
 
-                    uponPrePre
-                    
-                             ->
-                                    sensusMessage) message);
+                                case ROUND_CHANGE ->
+                                    uponRoundChange((RoundChangeMessage) message);
 
-                case COMMI
-                    uponCommit((ConsensusM
-                            
-                                    
+                                case ACK ->
+                                    LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received ACK message from {1}",
+                                            config.getId(), message.getSenderId()));
 
-            
-
-                   
-     
-
-    
-    
                                 case IGNORE ->
-                                   
-                
-                          config.getId(), message.getSenderId()));
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} - Received IGNORE message from {1}",
+                                                    config.getId(), message.getSenderId()));
 
-         
-                                LOGGER.log(Level.INFO,
+                                default ->
+                                    LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received unknown message from {1}",
                                                     config.getId(), message.getSenderId()));
 
