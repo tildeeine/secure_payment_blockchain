@@ -89,7 +89,7 @@ public class NodeService implements UDPService {
     // Map of consensus instances to client data, used for consensus messages
     private Map<Integer, String> consensusToDataMapping = new ConcurrentHashMap<>();
     // Map of clientID strings to client balances, used for balanceRequests
-    private Map<String, Float> clientBalances = new ConcurrentHashMap<>();
+    protected Map<String, Float> clientBalances = new ConcurrentHashMap<>();
     // Map of used request IDs to client IDs, used for checking if a request ID has
     // already been used
     private Map<String, Integer> lastUsedRequestIDs = new ConcurrentHashMap<>();
@@ -835,8 +835,6 @@ public class NodeService implements UDPService {
                 String localBlockHash;
                 try {
                     localBlockHash = Blockchain.calculateHash(blockToBeExecuted);
-                    System.out.println("local " + localBlockHash);
-                    System.out.println("commited " + commitedBlockHash);
                     if (commitedBlockHash.equals(localBlockHash)) {
                         this.blockchain.addBlock(blockToBeExecuted);
                     }
@@ -872,10 +870,19 @@ public class NodeService implements UDPService {
         // to get quorum for this.
 
         // Update sender and receiver balances
-        String[] transferContent = transaction.getValue().split(" ");
-        String amount = transferContent[0];
-        String destination = transferContent[1];
-        String requestId = transferContent[2];
+        String[] transferContent;
+        String amount;
+        String destination;
+        String requestId;
+        try {
+            transferContent = transaction.getValue().split(" ");
+            amount = transferContent[0];
+            destination = transferContent[1];
+            requestId = transferContent[2];
+        } catch (Exception e) {
+            System.out.println("Transaction data on wrong format");
+            return;
+        }
 
         // Update sender balance
         float senderBalance = clientBalances.getOrDefault(transaction.getClientID(), 0.0f);

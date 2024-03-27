@@ -98,15 +98,13 @@ public class TestableNodeService extends NodeService {
         super.getInstanceInfo().put(currentInstance, instanceInfo);
     }
 
-    public void sendQuorumOfCommitMessages(String blockHash) {
+    public void sendCommitMessages(String blockHash, int number) {
         int consensusInstance = super.getConsensusInstance().get();
-        int round = 1; // or dynamic if needed
+        int round = 1;
 
         CommitMessage commitMessage = new CommitMessage(blockHash);
 
-        int quorum = calculateQuorum();
-
-        for (int i = 0; i < quorum; i++) {
+        for (int i = 0; i < number; i++) {
             ConsensusMessage consensusMessage = new ConsensusMessageBuilder(String.valueOf(i + 1), Message.Type.COMMIT)
                     .setConsensusInstance(consensusInstance)
                     .setRound(round)
@@ -116,7 +114,7 @@ public class TestableNodeService extends NodeService {
         }
     }
 
-    public void sendQuorumOfPrepareMessages(String blockHash) {
+    public void sendPrepareMessages(String blockHash, int numberOfMessages) {
         int consensusInstance = super.getConsensusInstance().get();
         int round = 1;
 
@@ -124,9 +122,7 @@ public class TestableNodeService extends NodeService {
         PrepareMessage prepareMessage = new PrepareMessage(blockHash);
         String prepareMessageJson = new Gson().toJson(prepareMessage);
 
-        int quorum = calculateQuorum();
-
-        for (int i = 0; i < quorum; i++) {
+        for (int i = 0; i < numberOfMessages; i++) {
             ConsensusMessage consensusMessage = new ConsensusMessageBuilder(String.valueOf(i + 1), Message.Type.PREPARE)
                     .setConsensusInstance(consensusInstance)
                     .setRound(round)
@@ -136,7 +132,7 @@ public class TestableNodeService extends NodeService {
         }
     }
 
-    public int calculateQuorum() {
+    public int getQuorum() {
         int f = Math.floorDiv(nodesConfig.length - 1, 3);
         return Math.floorDiv(nodesConfig.length + f, 2) + 1;
     }
