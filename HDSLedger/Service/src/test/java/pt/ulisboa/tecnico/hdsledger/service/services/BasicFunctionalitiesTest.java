@@ -54,7 +54,7 @@ import pt.ulisboa.tecnico.hdsledger.service.blockchain.Block;
 import pt.ulisboa.tecnico.hdsledger.service.blockchain.Blockchain;
 
 @ExtendWith(MockitoExtension.class)
-public class NodeServiceNormalTest {
+public class BasicFunctionalitiesTest {
     private TestableNodeService nodeService;
 
     private static String nodesConfigPath = "src/test/resources/test_config.json";
@@ -147,70 +147,12 @@ public class NodeServiceNormalTest {
         return clientData;
     }
 
-    // Test that client data that is not signed is not accepted for quorum
-    // Illustrates byzantine nodes sending invalid data
+    // Test that block is appended to blockchain if valid commit quorum
     @Test
-    void testRejectUnsignedClientData() {
-        System.out.println("Reject unsigned client data");
+    public void testCommitAddsTransactionToBlock() {
+        System.out.println("Add transaction to block on commit...");
+        int ledgerLengthBefore = nodeService.getBlockchain().getLength();
 
-        // Prepare unsigned client data
-        ClientData unsignedClientData = new ClientData();
-        unsignedClientData.setRequestID(1); // Example request ID
-        unsignedClientData.setValue("20 client2 1"); // Transaction value
-        unsignedClientData.setClientID("client1"); // Client ID
-
-        ClientMessage falseClientMessage = new ClientMessage(unsignedClientData.getClientID(), Message.Type.TRANSFER);
-        falseClientMessage.setClientData(unsignedClientData);
-
-        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(unsignedClientData);
-
-        // Assuming setupInstanceInfoForBlock has already been called inside
-        // addToTransactionQueueAndCreateBlock
-        nodeService.sendCommitMessages(blockHash, nodeService.getQuorum());
-
-        // Verify no commit messages were sent due to the unsigned client data
-        verify(linkSpy, times(0)).send(anyString(), argThat(argument -> argument instanceof ConsensusMessage
-                && ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
-    }
-
-    // Test that a replayed message is not accepted for quorum
-    @Test
-    private void testRejectReplayedMessage() {
-        System.out.println("Reject replayed message");
-
-        ClientData clientData = setupClientData("20 client2 1");
-        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
-
-        // Assuming setupInstanceInfoForBlock has already been called inside
-        // addToTransactionQueueAndCreateBlock
-        nodeService.sendPrepareMessages(blockHash, nodeService.getQuorum());
-
-        // Verify that the commit messages were sent
-        verify(linkSpy, times(nodeService.getQuorum())).send(anyString(),
-                argThat(argument -> argument instanceof ConsensusMessage
-                        && ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
-
-        // Reset the link spy to clear the interactions
-        Mockito.reset(linkSpy);
-
-        // Send the same prepare messages again
-        nodeService.sendPrepareMessages(blockHash, nodeService.getQuorum());
-
-        // Verify that no commit messages were sent
-        verify(linkSpy, times(0)).send(anyString(), argThat(argument -> argument instanceof ConsensusMessage
-                && ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
-    }
-
-    // Test client balances after a successful transaction
-    // Balance should be updated correctly for both nodes
-    @Test
-    public void testClientBalances() {
-        System.out.println("Client balances test");
-
-        // Set up client balances
-        nodeService.initialiseClientBalances(clientConfigs);
-
-        // Set up client data
         ClientData clientData = setupClientData("20 client2 1");
         String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
 
@@ -218,9 +160,69 @@ public class NodeServiceNormalTest {
         // addToTransactionQueueAndCreateBlock
         nodeService.sendCommitMessages(blockHash, nodeService.getQuorum());
 
-        // Check that the balances were updated correctly
-        assertEquals(80f, nodeService.clientBalances.getOrDefault("client1", 0.0f));
-        assertEquals(120f, nodeService.clientBalances.getOrDefault("client2", 0.0f));
+        // Check that the block was added to the blockchain
+        Block latestBlock = nodeService.getBlockchain().getLatestBlock();
+        assertEquals(ledgerLengthBefore + 1, nodeService.getBlockchain().getLength());
+        assertEquals(1, latestBlock.getTransactions().size());
+        assertTrue(latestBlock.getTransactions().contains(clientData));
+    }
+
+    // Test that block is not appended to blockchain if invalid commit quorum
+    @Test
+    public void testNoCommitNoTransactionToBlock() {
+        System.out.println("No transaction to block on no commit...");
+        int ledgerLengthBefore = nodeService.getBlockchain().getLength();
+
+        ClientData clientData = setupClientData("20 client2 1");
+        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
+
+        // Assuming setupInstanceInfoForBlock has already been called inside
+        // addToTransactionQueueAndCreateBlock
+        nodeService.sendCommitMessages(blockHash, nodeService.getQuorum() - 1);
+
+        // Check that the block was not added to the blockchain
+        assertEquals(ledgerLengthBefore, nodeService.getBlockchain().getLength());
+    }
+
+    // Test that updateLeader is done correctly
+    @Test
+    public void testUpdateLeader() {
+        System.out.println("Update leader test...");
+        String newLeaderId = "2";
+
+        // Increment the current round to simulate a round change
+        int initialConsensusInstance = nodeService.getConsensusInstance().get();
+
+        nodeService.setupInstanceInfoForBlock("testString", 1);
+
+        // Retrieve the updated instance info
+        InstanceInfo instance = nodeService.getInstanceInfo().get(initialConsensusInstance);
+
+        int targetRound = instance.getCurrentRound() + 1;
+        instance.setCurrentRound(targetRound);
+
+        // Act
+        nodeService.updateLeader();
+
+        assertEquals(true, nodeService.isLeader(newLeaderId));
+    }
+
+    // Test that commit is sent if there is a quorum of prepare messages
+    @Test
+    public void testCommitOnPrepareQuorum() {
+        System.out.println("Commit on valid quorum...");
+
+        ClientData clientData = setupClientData("20 client2 1");
+        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
+        // nodeService.startConsensus();
+        nodeService.sendPrepareMessages(blockHash, nodeService.getQuorum());
+
+        int quorum = nodeService.getQuorum();
+
+        // Check that the commit message was sent
+        verify(linkSpy, times(quorum)).send(anyString(), argThat(argument -> argument instanceof ConsensusMessage &&
+                ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
+
     }
 
 }
