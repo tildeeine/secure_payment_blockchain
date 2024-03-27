@@ -326,4 +326,47 @@ public class NodeServiceNormalTest {
         assertEquals(120f, nodeService.clientBalances.getOrDefault("client2", 0.0f));
     }
 
+    // Test client trying to send more money than they have
+    // Should not update balances
+    @Test
+    public void testClientBalancesFailedTransaction() {
+        System.out.println("Client balances overspend test");
+
+        // Set up client balances
+        nodeService.initialiseClientBalances(clientConfigs);
+
+        // Set up client data
+        ClientData clientData = setupClientData("200 client2 1");
+
+        ClientMessage clientMessage = new ClientMessage(clientData.getClientID(), Message.Type.TRANSFER);
+        clientMessage.setClientData(clientData);
+
+        nodeService.handleTransfer(clientMessage);
+
+        // Check that the balances were not updated
+        assertEquals(100f, nodeService.clientBalances.getOrDefault("client1", 0.0f));
+        assertEquals(100f, nodeService.clientBalances.getOrDefault("client2", 0.0f));
+    }
+
+    // Test that a client can't send money to non-existent clients
+    @Test
+    public void testClientBalancesNonExistentClient() {
+        System.out.println("Client balances non-existent client test");
+
+        // Set up client balances
+        nodeService.initialiseClientBalances(clientConfigs);
+
+        // Set up client data
+        ClientData clientData = setupClientData("20 nonexistent 1");
+        ClientMessage clientMessage = new ClientMessage(clientData.getClientID(), Message.Type.TRANSFER);
+        clientMessage.setClientData(clientData);
+
+        nodeService.handleTransfer(clientMessage);
+        ;
+
+        // Check that the balances were not updated
+        assertEquals(100f, nodeService.clientBalances.getOrDefault("client1", 0.0f));
+        assertEquals(100f, nodeService.clientBalances.getOrDefault("client2", 0.0f));
+    }
+
 }

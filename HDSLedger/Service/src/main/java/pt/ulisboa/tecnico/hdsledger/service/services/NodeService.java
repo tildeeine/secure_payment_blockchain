@@ -884,6 +884,15 @@ public class NodeService implements UDPService {
             return;
         }
 
+        if (!clientBalances.containsKey(transaction.getClientID())) {
+            System.out.println("Client does not exist");
+            return;
+        }
+        if (clientBalances.get(transaction.getClientID()) < Float.parseFloat(amount)) {
+            System.out.println("Client does not have enough balance to send the amount");
+            return;
+        }
+
         // Update sender balance
         float senderBalance = clientBalances.getOrDefault(transaction.getClientID(), 0.0f);
         clientBalances.put(transaction.getClientID(), senderBalance - Float.parseFloat(amount));
