@@ -66,7 +66,7 @@ public class NodeService implements UDPService {
     private int timeout;
 
     // Consensus instance -> Round -> List of prepare messages
-    private final MessageBucket prepareMessages;
+    protected final MessageBucket prepareMessages;
     // Consensus instance -> Round -> List of commit messages
     private final MessageBucket commitMessages;
 
@@ -101,12 +101,15 @@ public class NodeService implements UDPService {
 
     private int quorum;
 
+    protected int initialDelayInSeconds = 15; // Wait 15 seconds before the first consensus
+    protected int intervalInSeconds = 15; // Consensus every 15 seconds
+
     // Blockchain and transaction related fields
     private Blockchain blockchain;
 
     private ConcurrentLinkedQueue<ClientData> transactionQueue = new ConcurrentLinkedQueue<>();
 
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    protected final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
     private Map<String, Float> currencyUsedInBlock = new ConcurrentHashMap<>();
 
@@ -114,7 +117,7 @@ public class NodeService implements UDPService {
 
     private int nextBlock;
 
-    private Map<Integer, Block> blockNumberToBlockMapping = new ConcurrentHashMap<>();
+    protected Map<Integer, Block> blockNumberToBlockMapping = new ConcurrentHashMap<>();
 
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig leaderConfig, ProcessConfig[] nodesConfig) {
@@ -145,6 +148,14 @@ public class NodeService implements UDPService {
 
     public void sendTestMessage(String nodeId, Message message) {
         link.send(nodeId, message);
+    }
+
+    protected void addToTransactionQueue(ClientData transaction) {
+        transactionQueue.offer(transaction);
+    }
+
+    public Blockchain getBlockchain() {
+        return this.blockchain;
     }
 
     public void initialiseClientBalances(ProcessConfig[] clientConfigs) {
@@ -450,7 +461,7 @@ public class NodeService implements UDPService {
      * @param inputValue Value to value agreed upon
      */
     public void startConsensus() {
-        System.out.println("Start consensus");
+        System.out.println("Starting consensus");
 
         // Create new block
         Block block = this.blockCreator();
@@ -521,8 +532,7 @@ public class NodeService implements UDPService {
 
     }
 
-    public boolean authorizeClientTransaction(ClientData transactionData) { // ! Add verification of request ID as
-                                                                            // nonce, right in sequence
+    public boolean authorizeClientTransaction(ClientData transactionData) {
         // Verify message signature, checks that source is the client
         if (!verifyClientData(transactionData)) {
             System.out.println("Transaction is not valid");
@@ -803,7 +813,9 @@ public class NodeService implements UDPService {
             }
 
             String commitedBlockHash = prepMessage.get().deserializeCommitMessage().getValue();
+
             cancelTimer();
+
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
 
@@ -823,8 +835,11 @@ public class NodeService implements UDPService {
                 String localBlockHash;
                 try {
                     localBlockHash = Blockchain.calculateHash(blockToBeExecuted);
-                    if (commitedBlockHash.equals(localBlockHash))
+                    System.out.println("local " + localBlockHash);
+                    System.out.println("commited " + commitedBlockHash);
+                    if (commitedBlockHash.equals(localBlockHash)) {
                         this.blockchain.addBlock(blockToBeExecuted);
+                    }
                     this.commitedValues.put(localConsensusInstance, localBlockHash);
                 } catch (NoSuchAlgorithmException | IOException e) {
                     e.printStackTrace();
@@ -907,7 +922,7 @@ public class NodeService implements UDPService {
         this.transactionQueue.offer(transferData);
     }
 
-    private Block blockCreator() {
+    protected Block blockCreator() {
 
         Block block = new Block(this.blockNumber.getAndIncrement());
 
@@ -971,8 +986,6 @@ public class NodeService implements UDPService {
     }
 
     public void startConsensusWithTimer() {
-        int initialDelayInSeconds = 15; // Wait 15 seconds before the first consensus
-        int intervalInSeconds = 15; // Consensus every 15 seconds
         System.out.println("Consensus timer expired. Start consensus");
         scheduler.scheduleWithFixedDelay(() -> startConsensus(), initialDelayInSeconds, intervalInSeconds,
                 TimeUnit.SECONDS);
