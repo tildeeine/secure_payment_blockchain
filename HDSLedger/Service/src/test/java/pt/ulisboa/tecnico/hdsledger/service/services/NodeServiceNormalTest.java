@@ -146,19 +146,6 @@ public class NodeServiceNormalTest {
         return clientData;
     }
 
-    public String setupFirstHash() {
-        // Assume this is the first block, so previous block is genesis block
-        Block genesisBlock = new Block(0);
-        genesisBlock.setPrevHash("0");
-
-        try {
-            return Blockchain.calculateHash(genesisBlock);
-        } catch (Exception e) {
-            System.out.println("Error calculating hash");
-            return null;
-        }
-    }
-
     // Test that transactions are added to the blockchain when valid
     @Test
     public void testCommitAddsTransactionToBlock() {
@@ -177,6 +164,29 @@ public class NodeServiceNormalTest {
         assertEquals(ledgerLengthBefore + 1, nodeService.getBlockchain().getLength());
         assertEquals(1, latestBlock.getTransactions().size());
         assertTrue(latestBlock.getTransactions().contains(clientData));
+    }
+
+    // Test that updateLeader is done correctly
+    @Test
+    public void testUpdateLeader() {
+        System.out.println("Update leader test...");
+        String newLeaderId = "2";
+
+        // Increment the current round to simulate a round change
+        int initialConsensusInstance = nodeService.getConsensusInstance().get();
+
+        nodeService.setupInstanceInfoForBlock("testString", 1);
+
+        // Retrieve the updated instance info
+        InstanceInfo instance = nodeService.getInstanceInfo().get(initialConsensusInstance);
+
+        int targetRound = instance.getCurrentRound() + 1;
+        instance.setCurrentRound(targetRound);
+
+        // Act
+        nodeService.updateLeader();
+
+        assertEquals(true, nodeService.isLeader(newLeaderId));
     }
 
 }

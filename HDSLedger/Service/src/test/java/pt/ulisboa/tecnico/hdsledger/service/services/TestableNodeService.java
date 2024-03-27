@@ -81,7 +81,7 @@ public class TestableNodeService extends NodeService {
         try {
             String blockHash = Blockchain.calculateHash(block);
             super.blockNumberToBlockMapping.put(block.getBLOCK_ID(), block);
-            setupInstanceInfoForBlock(blockHash);
+            setupInstanceInfoForBlock(blockHash, 1);
             return blockHash;
         } catch (NoSuchAlgorithmException | IOException e) {
             e.printStackTrace();
@@ -89,10 +89,10 @@ public class TestableNodeService extends NodeService {
         }
     }
 
-    private void setupInstanceInfoForBlock(String blockHash) {
-        int currentInstance = super.getConsensusInstance().incrementAndGet();
+    public void setupInstanceInfoForBlock(String blockHash, int targetRound) {
+        int currentInstance = super.getConsensusInstance().get();
         InstanceInfo instanceInfo = new InstanceInfo(blockHash);
-        instanceInfo.setCurrentRound(1); // Assuming the initial round starts at 1
+        instanceInfo.setCurrentRound(targetRound); // Assuming the initial round starts at 1
         super.getInstanceInfo().put(currentInstance, instanceInfo);
     }
 
