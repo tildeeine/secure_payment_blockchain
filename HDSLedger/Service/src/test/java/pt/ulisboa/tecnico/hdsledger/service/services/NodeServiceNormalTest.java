@@ -189,4 +189,22 @@ public class NodeServiceNormalTest {
         assertEquals(true, nodeService.isLeader(newLeaderId));
     }
 
+    // Test that commit is sent if there is a quorum of prepare messages
+    @Test
+    public void testCommitOnPrepareQuorum() {
+        System.out.println("Commit on valid quorum...");
+
+        ClientData clientData = setupClientData("20 client2 1");
+        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
+        // nodeService.startConsensus();
+        nodeService.sendQuorumOfPrepareMessages(blockHash);
+
+        int quorum = nodeService.calculateQuorum();
+
+        // Check that the commit message was sent
+        verify(linkSpy, times(quorum)).send(anyString(), argThat(argument -> argument instanceof ConsensusMessage &&
+                ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
+
+    }
+
 }

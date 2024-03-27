@@ -15,9 +15,11 @@ import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
 
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
+import com.google.gson.Gson;
 
 public class TestableNodeService extends NodeService {
 
@@ -101,6 +103,7 @@ public class TestableNodeService extends NodeService {
         int round = 1; // or dynamic if needed
 
         CommitMessage commitMessage = new CommitMessage(blockHash);
+
         int quorum = calculateQuorum();
 
         for (int i = 0; i < quorum; i++) {
@@ -113,7 +116,27 @@ public class TestableNodeService extends NodeService {
         }
     }
 
-    private int calculateQuorum() {
+    public void sendQuorumOfPrepareMessages(String blockHash) {
+        int consensusInstance = super.getConsensusInstance().get();
+        int round = 1;
+
+        // Create a PrepareMessage object containing the blockHash
+        PrepareMessage prepareMessage = new PrepareMessage(blockHash);
+        String prepareMessageJson = new Gson().toJson(prepareMessage);
+
+        int quorum = calculateQuorum();
+
+        for (int i = 0; i < quorum; i++) {
+            ConsensusMessage consensusMessage = new ConsensusMessageBuilder(String.valueOf(i + 1), Message.Type.PREPARE)
+                    .setConsensusInstance(consensusInstance)
+                    .setRound(round)
+                    .setMessage(prepareMessageJson) // Pass the serialized PrepareMessage JSON here
+                    .build();
+            super.uponPrepare(consensusMessage);
+        }
+    }
+
+    public int calculateQuorum() {
         int f = Math.floorDiv(nodesConfig.length - 1, 3);
         return Math.floorDiv(nodesConfig.length + f, 2) + 1;
     }

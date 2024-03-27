@@ -666,7 +666,7 @@ public class NodeService implements UDPService {
         int round = message.getRound();
         String senderId = message.getSenderId();
 
-        PrepareMessage prepareMessage = message.deserializePrepareMessage();
+        PrepareMessage prepareMessage = message.deserializePrepareMessage();// ! issue
 
         String blockHash = prepareMessage.getValue();
 
