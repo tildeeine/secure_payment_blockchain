@@ -797,10 +797,7 @@ public class NodeService implements UDPService {
         Optional<String> commitValue = commitMessages.hasValidCommitQuorum(config.getId(),
                 consensusInstance, round);
 
-        System.out.println("Checking COMMIT message");
-
         if (commitValue.isPresent() && instance.getCommittedRound() < round) {
-            System.out.println("Value to commit: " + commitValue.get());
             Optional<ConsensusMessage> prepMessage = this.commitMessages.getMessages(consensusInstance, round).values()
                     .stream()
                     .filter(entry -> entry.deserializeCommitMessage().getValue()
@@ -884,12 +881,16 @@ public class NodeService implements UDPService {
             return;
         }
 
-        if (!clientBalances.containsKey(transaction.getClientID())) {
+        if (!clientBalances.containsKey(destination)) {
             System.out.println("Client does not exist");
             return;
         }
         if (clientBalances.get(transaction.getClientID()) < Float.parseFloat(amount)) {
             System.out.println("Client does not have enough balance to send the amount");
+            return;
+        }
+        if (Float.parseFloat(amount) < 0) {
+            System.out.println("Amount is negative");
             return;
         }
 

@@ -29,10 +29,11 @@ import javax.sound.sampled.AudioFileFormat.Type;
 import java.security.PrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.KeyFactory;
-import java.beans.Transient;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
@@ -338,10 +339,11 @@ public class NodeServiceNormalTest {
         // Set up client data
         ClientData clientData = setupClientData("200 client2 1");
 
-        ClientMessage clientMessage = new ClientMessage(clientData.getClientID(), Message.Type.TRANSFER);
-        clientMessage.setClientData(clientData);
+        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
 
-        nodeService.handleTransfer(clientMessage);
+        // Assuming setupInstanceInfoForBlock has already been called inside
+        // addToTransactionQueueAndCreateBlock
+        nodeService.sendCommitMessages(blockHash, nodeService.getQuorum());
 
         // Check that the balances were not updated
         assertEquals(100f, nodeService.clientBalances.getOrDefault("client1", 0.0f));
@@ -358,15 +360,66 @@ public class NodeServiceNormalTest {
 
         // Set up client data
         ClientData clientData = setupClientData("20 nonexistent 1");
-        ClientMessage clientMessage = new ClientMessage(clientData.getClientID(), Message.Type.TRANSFER);
-        clientMessage.setClientData(clientData);
+        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
 
-        nodeService.handleTransfer(clientMessage);
-        ;
+        // Assuming setupInstanceInfoForBlock has already been called inside
+        // addToTransactionQueueAndCreateBlock
+        nodeService.sendCommitMessages(blockHash, nodeService.getQuorum());
+
+        // Check that the balances were not updated
+        assertEquals(100f, nodeService.clientBalances.getOrDefault("client1", 0.0f));
+    }
+
+    // Test that a client can't send negative money
+    @Test
+    public void testClientBalancesNegativeMoney() {
+        System.out.println("Client balances negative money test");
+
+        // Set up client balances
+        nodeService.initialiseClientBalances(clientConfigs);
+
+        // Set up client data
+        ClientData clientData = setupClientData("-20 client2 1");
+        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
+
+        // Assuming setupInstanceInfoForBlock has already been called inside
+        // addToTransactionQueueAndCreateBlock
+        nodeService.sendCommitMessages(blockHash, nodeService.getQuorum());
 
         // Check that the balances were not updated
         assertEquals(100f, nodeService.clientBalances.getOrDefault("client1", 0.0f));
         assertEquals(100f, nodeService.clientBalances.getOrDefault("client2", 0.0f));
+    }
+
+    // Test that double spending doesn't work
+    @Test
+    public void testDoubleSpendingRejected() {
+        System.out.println("Double spending rejected test");
+
+        // Set up client balances
+        nodeService.initialiseClientBalances(clientConfigs);
+
+        // Set up client data
+        ClientData clientData1 = setupClientData("20 client2 1"); // amount, dest, reqID
+        ClientData clientData2 = setupClientData("20 client3 1");
+
+        ClientMessage clientMessage1 = new ClientMessage(clientData1.getClientID(), Message.Type.TRANSFER);
+        clientMessage1.setClientData(clientData1);
+        ClientMessage clientMessage2 = new ClientMessage(clientData2.getClientID(), Message.Type.TRANSFER);
+        clientMessage2.setClientData(clientData2);
+
+        String blockHash1 = nodeService.addToTransactionQueueAndCreateBlock(clientData1);
+        String blockHash2 = nodeService.addToTransactionQueueAndCreateBlock(clientData2);
+
+        // Assuming setupInstanceInfoForBlock has already been called inside
+        // addToTransactionQueueAndCreateBlock
+        nodeService.sendCommitMessages(blockHash1, nodeService.getQuorum());
+        nodeService.sendCommitMessages(blockHash2, nodeService.getQuorum());
+
+        // Check that only the first transaction was successful
+        assertEquals(80f, nodeService.clientBalances.getOrDefault("client1", 0.0f));
+        assertEquals(120f, nodeService.clientBalances.getOrDefault("client2", 0.0f));
+        assertEquals(100f, nodeService.clientBalances.getOrDefault("client3", 0.0f));
     }
 
 }
