@@ -223,4 +223,20 @@ public class NodeServiceNormalTest {
         assertEquals(120f, nodeService.clientBalances.getOrDefault("client2", 0.0f));
     }
 
+    // Test that block is not appended if the hash is invalid
+    @Test
+    public void testNoBlockIfInvalidHash() {
+        System.out.println("No block if invalid hash");
+
+        ClientData clientData = setupClientData("20 client2 1");
+        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
+
+        // Assuming setupInstanceInfoForBlock has already been called inside
+        // addToTransactionQueueAndCreateBlock
+        nodeService.sendCommitMessages("invalidHash", nodeService.getQuorum());
+
+        // Check that the block was not added to the blockchain
+        assertEquals(1, nodeService.getBlockchain().getLength());
+    }
+
 }
