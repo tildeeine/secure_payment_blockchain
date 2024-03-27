@@ -163,51 +163,14 @@ public class NodeServiceNormalTest {
     @Test
     public void testCommitAddsTransactionToBlock() {
         System.out.println("Add transaction to block on commit...");
-
-        // Get ledger length before commit
         int ledgerLengthBefore = nodeService.getBlockchain().getLength();
 
-        // Set up message as from client
         ClientData clientData = setupClientData("20 client2 1");
-        ClientMessage transferMessage = new ClientMessage("client2", Message.Type.TRANSFER);
-        transferMessage.setClientData(clientData);
-        nodeService.addToTransactionQueue(clientData);
-        Block block = nodeService.blockCreator();
-        nodeService.blockNumberToBlockMapping.put(block.getBLOCK_ID(), block);
-        String firstHash;
-        try {
-            firstHash = Blockchain.calculateHash(block);
-        } catch (NoSuchAlgorithmException | IOException e) {
-            e.printStackTrace();
-            return;
-        }
+        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
 
-        // Test setup: Ensure an InstanceInfo exists for the current consensus instance
-        int initialConsensusInstance = nodeService.getConsensusInstance().get();
-        InstanceInfo initialInstanceInfo = new InstanceInfo(setupFirstHash());
-        initialInstanceInfo.setCurrentRound(1); // Assuming the initial round starts at 1
-        nodeService.getInstanceInfo().put(initialConsensusInstance, initialInstanceInfo);
-
-        // Send quorum of prepare messages
-        int consensusInstance = nodeService.getConsensusInstance().get();
-        int round = 1;
-
-        CommitMessage commitMessage = new CommitMessage(firstHash);
-        System.out.println("First hash: " + firstHash);// !
-        initialInstanceInfo.setCommitMessage(commitMessage);
-
-        int f = Math.floorDiv(nodeConfigs.length - 1, 3);
-        int quorum = Math.floorDiv(nodeConfigs.length + f, 2) + 1;
-
-        for (int i = 0; i < quorum; i++) {
-            // Create prepare message
-            ConsensusMessage consensusMessage = new ConsensusMessageBuilder(String.valueOf(i + 1), Message.Type.COMMIT)
-                    .setConsensusInstance(consensusInstance)
-                    .setRound(round)
-                    .setMessage(commitMessage.toJson())
-                    .build();
-            nodeService.uponCommit(consensusMessage);
-        }
+        // Assuming setupInstanceInfoForBlock has already been called inside
+        // addToTransactionQueueAndCreateBlock
+        nodeService.sendQuorumOfCommitMessages(blockHash);
 
         // Check that the block was added to the blockchain
         Block latestBlock = nodeService.getBlockchain().getLatestBlock();

@@ -51,7 +51,7 @@ public class NodeService implements UDPService {
 
     private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
     // Nodes configurations
-    private final ProcessConfig[] nodesConfig;
+    protected final ProcessConfig[] nodesConfig;
 
     // Current node is leader
     private final ProcessConfig config;
