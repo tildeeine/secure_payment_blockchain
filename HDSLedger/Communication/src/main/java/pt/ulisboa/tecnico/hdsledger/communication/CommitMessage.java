@@ -2,17 +2,18 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 
 import com.google.gson.Gson;
 
+
 public class CommitMessage {
 
     // Value
-    private ClientData clientData;
+    private String value;
 
-    public CommitMessage(ClientData clientData) {
-        this.clientData = clientData;
+    public CommitMessage(String value) {
+        this.value = value;
     }
 
-    public ClientData getClientData() {
-        return clientData;
+    public String getValue() {
+        return value;
     }
 
     public String toJson() {

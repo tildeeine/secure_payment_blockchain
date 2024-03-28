@@ -14,16 +14,16 @@ public class RoundChangeMessage extends Message {
     private int prepared_round;
 
     //private String prepared_value;
-    private ClientData prepared_data;
+    private String preparedValue;
 
     private HashSet<ConsensusMessage> prepareMessages;
     
-    public RoundChangeMessage(String senderId, Type type, int consensusInstance, int round, int prepared_round, ClientData prepared_data) {
+    public RoundChangeMessage(String senderId, Type type, int consensusInstance, int round, int prepared_round, String preparedValue) {
         super(senderId, type);
         this.consensusInstance = consensusInstance;
         this.round = round;
         this.prepared_round = prepared_round;
-        this.prepared_data = prepared_data;
+        this.preparedValue = preparedValue;
         this.prepareMessages = new HashSet<>();
     }
 
@@ -60,12 +60,12 @@ public class RoundChangeMessage extends Message {
     }
 
     // Getter and setter for prepared_value
-    public ClientData getClientData() {
-        return this.prepared_data;
+    public String getPreparedValue() {
+        return this.preparedValue;
     }
 
-    public void setPreparedValue(ClientData prepared_data) {
-        this.prepared_data = prepared_data;
+    public void setPreparedValue(String preparedValue) {
+        this.preparedValue = preparedValue;
     }
 
     public String toJson() {

@@ -90,6 +90,9 @@ public class NodeService implements UDPService {
     private Map<Integer, String> consensusToDataMapping = new ConcurrentHashMap<>();
     // Map of clientID strings to client balances, used for balanceRequests
     private Map<String, Float> clientBalances = new ConcurrentHashMap<>();
+    // Map of used request IDs to client IDs, used for checking if a request ID has
+    // already been used
+    private Map<String, Integer> lastUsedRequestIDs = new ConcurrentHashMap<>();
 
     private Map<String, Float> nodeBalances = new ConcurrentHashMap<>();
     // Map of used request IDs to client IDs, used for checking if a request ID has
@@ -876,6 +879,7 @@ public class NodeService implements UDPService {
         String destination = transferContent[1];
         String requestId = transferContent[2];
 
+
         Double a = Float.parseFloat(amount)*0.9;
         Float amountToTransfer = a.floatValue();
 
@@ -883,6 +887,11 @@ public class NodeService implements UDPService {
         // Update sender balance
         float senderBalance = clientBalances.getOrDefault(transaction.getClientID(), 0.0f);
         clientBalances.put(transaction.getClientID(), senderBalance - amountToTransfer);
+
+        // Update sender balance
+        float senderBalance = clientBalances.getOrDefault(transaction.getClientID(), 0.0f);
+        clientBalances.put(transaction.getClientID(), senderBalance - Float.parseFloat(amount));
+
         // Update receiver balance
         float receiverBalance = clientBalances.getOrDefault(destination, 0.0f);
         clientBalances.put(destination, receiverBalance + Float.parseFloat(amount));
@@ -893,11 +902,13 @@ public class NodeService implements UDPService {
         confirmationMessage.setClientData(transaction);
         link.send(transaction.getClientID(), confirmationMessage);
 
+
         // Pay the leader
         a = Float.parseFloat(amount)*0.1;
         amountToTransfer = a.floatValue();
         float leaderBalance = nodeBalances.getOrDefault(this.leaderConfig.getId(), 0.0f);
         nodeBalances.put(this.leaderConfig.getId(), leaderBalance + amountToTransfer);
+
 
     }
 

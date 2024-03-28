@@ -1,20 +1,18 @@
 package pt.ulisboa.tecnico.hdsledger.service.models;
 
-
-import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
 import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
 
 public class InstanceInfo {
 
     private int currentRound = 1;
     private int preparedRound = -1;
-    private ClientData preparedData;
+    private String preparedValue;
     private CommitMessage commitMessage;
-    private ClientData clientData;
+    private String inputValue;
     private int committedRound = -1;
 
-    public InstanceInfo(ClientData clientData) {
-        this.clientData = clientData;
+    public InstanceInfo(String inputValue) {
+        this.inputValue = inputValue;
     }
 
     public int getCurrentRound() {
@@ -33,20 +31,20 @@ public class InstanceInfo {
         this.preparedRound = preparedRound;
     }
 
-    public ClientData getPreparedData() {
-        return preparedData;
+    public String getPreparedValue() {
+        return preparedValue;
     }
 
-    public void setPreparedData(ClientData preparedData) {
-        this.preparedData = preparedData;
+    public void setPreparedValue(String preparedValue) {
+        this.preparedValue = preparedValue;
     }
 
-    public ClientData getClientData() {
-        return clientData;
+    public String getInputValue() {
+        return inputValue;
     }
 
-    public void setClientData(ClientData clientData) {
-        this.clientData = clientData;
+    public void setInputValue(String inputValue) {
+        this.inputValue = inputValue;
     }
 
     public int getCommittedRound() {

@@ -263,6 +263,7 @@ public class Link {
 
             // Verify signature
             if (!verifySignature(m, signature, message.getSenderId())) {
+                System.out.println("Wrong signature");
                 return null;
             }
         }
@@ -275,10 +276,13 @@ public class Link {
             throw new HDSSException(ErrorMessage.NoSuchNode);
         }
 
+        System.out.println("Receiving " + message.getType() + " message from " + senderId);
+
         // Handle ACKS, since it's possible to receive multiple acks from the same
 
         // message
         if (message.getType().equals(Message.Type.ACK)) {
+            System.out.println("Ack");
             receivedAcks.add(messageId);
             return message;
         }
