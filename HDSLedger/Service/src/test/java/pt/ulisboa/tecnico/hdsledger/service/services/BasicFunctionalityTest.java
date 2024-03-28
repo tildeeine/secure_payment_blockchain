@@ -54,7 +54,7 @@ import pt.ulisboa.tecnico.hdsledger.service.blockchain.Block;
 import pt.ulisboa.tecnico.hdsledger.service.blockchain.Blockchain;
 
 @ExtendWith(MockitoExtension.class)
-public class BasicFunctionalitiesTest {
+public class BasicFunctionalityTest {
     private TestableNodeService nodeService;
 
     private static String nodesConfigPath = "src/test/resources/test_config.json";
@@ -223,6 +223,28 @@ public class BasicFunctionalitiesTest {
         verify(linkSpy, times(quorum)).send(anyString(), argThat(argument -> argument instanceof ConsensusMessage &&
                 ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
 
+    }
+
+    // Test client balances after a successful transaction
+    // Balance should be updated correctly for both nodes
+    @Test
+    public void testClientBalances() {
+        System.out.println("Client balances test");
+
+        // Set up client balances
+        nodeService.initialiseClientBalances(clientConfigs);
+
+        // Set up client data
+        ClientData clientData = setupClientData("20 client2 1");
+        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
+
+        // Assuming setupInstanceInfoForBlock has already been called inside
+        // addToTransactionQueueAndCreateBlock
+        nodeService.sendCommitMessages(blockHash, nodeService.getQuorum());
+
+        // Check that the balances were updated correctly
+        assertEquals(80f, nodeService.clientBalances.getOrDefault("client1", 0.0f));
+        assertEquals(120f, nodeService.clientBalances.getOrDefault("client2", 0.0f));
     }
 
 }

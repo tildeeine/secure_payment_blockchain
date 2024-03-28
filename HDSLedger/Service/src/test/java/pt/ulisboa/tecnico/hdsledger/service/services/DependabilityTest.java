@@ -5,6 +5,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
+
 import org.mockito.Mock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,7 +20,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.times;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Mockito;
-
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.*;
@@ -34,6 +39,9 @@ import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.Map;
+import com.google.gson.Gson;
+import java.util.HashMap;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
@@ -53,8 +61,9 @@ import pt.ulisboa.tecnico.hdsledger.utilities.Authenticate;
 import pt.ulisboa.tecnico.hdsledger.service.blockchain.Block;
 import pt.ulisboa.tecnico.hdsledger.service.blockchain.Blockchain;
 
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @ExtendWith(MockitoExtension.class)
-public class NodeServiceNormalTest {
+public class DependabilityTest {
     private TestableNodeService nodeService;
 
     private static String nodesConfigPath = "src/test/resources/test_config.json";
@@ -71,6 +80,8 @@ public class NodeServiceNormalTest {
     private static Link linkSpy;
 
     private static PrivateKey clientKey;
+
+    private Map<String, TestableNodeService> allNodes = new HashMap<>();
 
     @BeforeAll
     public static void setUpAll() {
@@ -100,11 +111,12 @@ public class NodeServiceNormalTest {
     @BeforeEach
     void setUp() {
         // Instantiate TestableNodeService
-        nodeService = nodeSetup(testNodeId);
+        nodeService = testNodeSetup(testNodeId);
+        allNodes.put(testNodeId, nodeService);
         MockitoAnnotations.initMocks(this);
     }
 
-    public TestableNodeService nodeSetup(String id) {
+    public TestableNodeService testNodeSetup(String id) {
         nodeConfigs = new ProcessConfigBuilder().fromFile(nodesConfigPath);
         clientConfigs = new ProcessConfigBuilder().fromFile(clientsConfigPath);
         ProcessConfig leaderConfig = Arrays.stream(nodeConfigs)
@@ -125,9 +137,47 @@ public class NodeServiceNormalTest {
                 nodeConfigs);
     }
 
+    public void setupAllNodes() {
+        for (ProcessConfig nodeConfig : nodeConfigs) {
+            if (nodeConfig.getId().equals(testNodeId)) {
+                continue;
+            }
+            TestableNodeService node = nodeSetup(nodeConfig.getId());
+            allNodes.put(nodeConfig.getId(), node);
+        }
+    }
+
+    // Function to set up all nodes in the network, for complete testing
+    public TestableNodeService nodeSetup(String id) {
+        nodeConfigs = new ProcessConfigBuilder().fromFile(nodesConfigPath);
+        clientConfigs = new ProcessConfigBuilder().fromFile(clientsConfigPath);
+        ProcessConfig leaderConfig = Arrays.stream(nodeConfigs)
+                .filter(ProcessConfig::isLeader)
+                .findAny()
+                .get();
+        ProcessConfig nodeConfig = Arrays.stream(nodeConfigs)
+                .filter(c -> c.getId().equals(id))
+                .findAny()
+                .get();
+
+        Link link = new Link(nodeConfig, nodeConfig.getPort(), nodeConfigs, ConsensusMessage.class);
+
+        // Add clients configs to the link, so node can send messages to clients
+        link.addClient(clientConfigs);
+
+        return new TestableNodeService(link, nodeConfig, leaderConfig,
+                nodeConfigs);
+
+    }
+
     @AfterEach
     void tearDown() {
-        nodeService.shutdown();
+        if (allNodes != null) {
+            for (TestableNodeService node : allNodes.values()) {
+                node.shutdown();
+            }
+            allNodes.clear(); // Clear the map after all nodes have been shut down
+        }
         Mockito.reset(linkSpy);
     }
 
@@ -147,34 +197,9 @@ public class NodeServiceNormalTest {
         return clientData;
     }
 
-    // Test that client data that is not signed is not accepted for quorum
-    // Illustrates byzantine nodes sending invalid data
-    @Test
-    void testRejectUnsignedClientData() {
-        System.out.println("Reject unsigned client data");
-
-        // Prepare unsigned client data
-        ClientData unsignedClientData = new ClientData();
-        unsignedClientData.setRequestID(1); // Example request ID
-        unsignedClientData.setValue("20 client2 1"); // Transaction value
-        unsignedClientData.setClientID("client1"); // Client ID
-
-        ClientMessage falseClientMessage = new ClientMessage(unsignedClientData.getClientID(), Message.Type.TRANSFER);
-        falseClientMessage.setClientData(unsignedClientData);
-
-        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(unsignedClientData);
-
-        // Assuming setupInstanceInfoForBlock has already been called inside
-        // addToTransactionQueueAndCreateBlock
-        nodeService.sendCommitMessages(blockHash, nodeService.getQuorum());
-
-        // Verify no commit messages were sent due to the unsigned client data
-        verify(linkSpy, times(0)).send(anyString(), argThat(argument -> argument instanceof ConsensusMessage
-                && ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
-    }
-
     // Test that a replayed message is not accepted for quorum
     @Test
+    @Order(1)
     private void testRejectReplayedMessage() {
         System.out.println("Reject replayed message");
 
@@ -201,42 +226,82 @@ public class NodeServiceNormalTest {
                 && ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
     }
 
-    // Test client balances after a successful transaction
-    // Balance should be updated correctly for both nodes
+    // Test that a byzantine leader sends conflicting pre-prepare messages
     @Test
-    public void testClientBalances() {
-        System.out.println("Client balances test");
+    @Order(2)
+    public void testConflictingLeaderPrePrepareMessages() {
+        System.out.println("Testing Byzantine leader sending conflicting pre-prepare messages...");
 
-        // Set up client balances
-        nodeService.initialiseClientBalances(clientConfigs);
+        setupAllNodes();
 
-        // Set up client data
-        ClientData clientData = setupClientData("20 client2 1");
-        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
+        // Get leader node
+        TestableNodeService leader = allNodes.get(leaderId);
 
-        // Assuming setupInstanceInfoForBlock has already been called inside
-        // addToTransactionQueueAndCreateBlock
-        nodeService.sendCommitMessages(blockHash, nodeService.getQuorum());
+        // Simulate Byzantine leader sending conflicting pre-prepare messages
+        int consensusInstance = nodeService.getConsensusInstance().get();
+        int round = 1;
 
-        // Check that the balances were updated correctly
-        assertEquals(80f, nodeService.clientBalances.getOrDefault("client1", 0.0f));
-        assertEquals(120f, nodeService.clientBalances.getOrDefault("client2", 0.0f));
+        // Create a PrepareMessage object. Assume leader is Byzantine and does not have
+        // the correct block hash
+        PrePrepareMessage prePrepareMessage = new PrePrepareMessage("incorrectBlockHash");
+        String preprepareMessageJson = new Gson().toJson(prePrepareMessage);
+
+        for (Map.Entry<String, TestableNodeService> entry : allNodes.entrySet()) {
+            TestableNodeService node = entry.getValue();
+
+            node.startConsensus();
+        }
+        for (Map.Entry<String, TestableNodeService> entry : allNodes.entrySet()) {
+            TestableNodeService node = entry.getValue();
+
+            ConsensusMessage consensusMessage = new ConsensusMessageBuilder(leaderId, Message.Type.PREPARE)
+                    .setConsensusInstance(consensusInstance)
+                    .setRound(round)
+                    .setMessage(preprepareMessageJson) // Pass the serialized PrepareMessage JSON here
+                    .build();
+            node.setupInstanceInfoForBlock("incorrectBlockHash", 1);
+            node.uponPrePrepare(consensusMessage);
+        }
+
+        // Wait 7 seconds for round change
+        try {
+            System.out.println("Waiting for round change...");
+            Thread.sleep(7000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        // Verify that round change is performed
+        // verify(linkSpy, times(1)).send(anyString(), argThat(argument -> argument
+        // instanceof ConsensusMessage
+        // && ((ConsensusMessage) argument).getType() == Message.Type.ROUND_CHANGE));
+        assertEquals(false, nodeService.isLeader(leaderId));
+        assertEquals(true, nodeService.isLeader("2"));
+
     }
 
-    // Test that block is not appended if the hash is invalid
+    // Test that a byzantine node sends conflicting prepare messages
     @Test
-    public void testNoBlockIfInvalidHash() {
-        System.out.println("No block if invalid hash");
+    @Order(3)
+    public void testConflictingNodePrepareMessages() {
+        System.out.println("Testing Byzantine node sending conflicting prepare messages...");
 
-        ClientData clientData = setupClientData("20 client2 1");
-        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
+    }
 
-        // Assuming setupInstanceInfoForBlock has already been called inside
-        // addToTransactionQueueAndCreateBlock
-        nodeService.sendCommitMessages("invalidHash", nodeService.getQuorum());
+    // Test that a byzantine node sends conflicting commit messages
+    @Test
+    @Order(4)
+    public void testConflictingNodeCommitMessages() {
+        System.out.println("Testing Byzantine node sending conflicting commit messages...");
 
-        // Check that the block was not added to the blockchain
-        assertEquals(1, nodeService.getBlockchain().getLength());
+    }
+
+    // Test a "complete" run of the system, from handleTransfer to final blockchain
+    @Test
+    @Order(5)
+    public void testCompleteRun() {
+        System.out.println("Testing complete run of the system...");
+
     }
 
 }

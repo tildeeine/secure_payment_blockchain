@@ -31,7 +31,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.RoundChangeMessage;
 
 @ExtendWith(MockitoExtension.class)
-class NodeServiceCrashTest {
+class RecoveryTest {
     // Class to test crash detection and handling of NodeService
 
     private TestableNodeService nodeService;

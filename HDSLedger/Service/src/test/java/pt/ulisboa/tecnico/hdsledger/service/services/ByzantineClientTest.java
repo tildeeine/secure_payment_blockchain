@@ -268,4 +268,46 @@ public class ByzantineClientTest {
         assertEquals(100f, nodeService.clientBalances.getOrDefault("client3", 0.0f));
     }
 
+    // Test that client data that is not signed is not accepted for quorum
+    // Illustrates byzantine nodes sending invalid data
+    @Test
+    void testRejectUnsignedClientData() {
+        System.out.println("Reject unsigned client data");
+
+        // Prepare unsigned client data
+        ClientData unsignedClientData = new ClientData();
+        unsignedClientData.setRequestID(1); // Example request ID
+        unsignedClientData.setValue("20 client2 1"); // Transaction value
+        unsignedClientData.setClientID("client1"); // Client ID
+
+        ClientMessage falseClientMessage = new ClientMessage(unsignedClientData.getClientID(), Message.Type.TRANSFER);
+        falseClientMessage.setClientData(unsignedClientData);
+
+        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(unsignedClientData);
+
+        // Assuming setupInstanceInfoForBlock has already been called inside
+        // addToTransactionQueueAndCreateBlock
+        nodeService.sendCommitMessages(blockHash, nodeService.getQuorum());
+
+        // Verify no commit messages were sent due to the unsigned client data
+        verify(linkSpy, times(0)).send(anyString(), argThat(argument -> argument instanceof ConsensusMessage
+                && ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
+    }
+
+    // Test that block is not appended if the hash is invalid
+    @Test
+    public void testNoBlockIfInvalidHash() {
+        System.out.println("No block if invalid hash");
+
+        ClientData clientData = setupClientData("20 client2 1");
+        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
+
+        // Assuming setupInstanceInfoForBlock has already been called inside
+        // addToTransactionQueueAndCreateBlock
+        nodeService.sendCommitMessages("invalidHash", nodeService.getQuorum());
+
+        // Check that the block was not added to the blockchain
+        assertEquals(1, nodeService.getBlockchain().getLength());
+    }
+
 }

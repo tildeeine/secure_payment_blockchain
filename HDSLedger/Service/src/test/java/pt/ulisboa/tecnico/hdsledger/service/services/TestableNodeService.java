@@ -30,7 +30,6 @@ public class TestableNodeService extends NodeService {
         // Add clients configs to the link, so node can send messages to clients
         super(link, nodeConfig, leaderConfig, nodesConfig);
         this.link = link;
-
     }
 
     @Override
@@ -42,34 +41,11 @@ public class TestableNodeService extends NodeService {
     public void shutdown() {
         System.out.println("Shutting down NodeService...");
 
-        shutdownExecutorService(scheduler);
-
         // Shutdown Link or network components
         if (link != null) {
             link.shutdown(); // Ensure this method properly closes sockets and cleans up resources.
         }
         System.out.println("NodeService shutdown completed.");
-    }
-
-    // Utility method for shutting down an ExecutorService
-    private void shutdownExecutorService(ScheduledExecutorService executorService) {
-        System.out.println("Shutting down ExecutorService...");
-        executorService.shutdown(); // Disable new tasks from being submitted
-        try {
-            // Wait a while for existing tasks to terminate
-            if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
-                executorService.shutdownNow(); // Cancel currently executing tasks
-                // Wait a while for tasks to respond to being cancelled
-                if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
-                    System.err.println("Executor service did not terminate");
-                }
-            }
-        } catch (InterruptedException ie) {
-            // (Re-)Cancel if current thread also interrupted
-            executorService.shutdownNow();
-            // Preserve interrupt status
-            Thread.currentThread().interrupt();
-        }
     }
 
     public String addToTransactionQueueAndCreateBlock(ClientData clientData) {
