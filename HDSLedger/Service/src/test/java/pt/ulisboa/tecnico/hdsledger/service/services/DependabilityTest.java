@@ -272,9 +272,8 @@ public class DependabilityTest {
         }
 
         // Verify that round change is performed
-        // verify(linkSpy, times(1)).send(anyString(), argThat(argument -> argument
-        // instanceof ConsensusMessage
-        // && ((ConsensusMessage) argument).getType() == Message.Type.ROUND_CHANGE));
+        verify(linkSpy, times(8)).send(anyString(), argThat(argument -> argument instanceof RoundChangeMessage
+                && ((RoundChangeMessage) argument).getType() == Message.Type.ROUND_CHANGE));
         assertEquals(false, nodeService.isLeader(leaderId));
         assertEquals(true, nodeService.isLeader("2"));
 
