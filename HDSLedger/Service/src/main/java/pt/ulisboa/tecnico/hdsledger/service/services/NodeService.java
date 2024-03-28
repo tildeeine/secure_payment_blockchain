@@ -51,7 +51,7 @@ public class NodeService implements UDPService {
 
     private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
     // Nodes configurations
-    private final ProcessConfig[] nodesConfig;
+    protected final ProcessConfig[] nodesConfig;
 
     // Current node is leader
     private final ProcessConfig config;
@@ -59,21 +59,21 @@ public class NodeService implements UDPService {
     private ProcessConfig leaderConfig;
 
     // Link to communicate with nodes
-    private final Link link;
+    protected final Link link;
 
     private Timer timer;
 
     private int timeout;
 
     // Consensus instance -> Round -> List of prepare messages
-    private final MessageBucket prepareMessages;
+    protected final MessageBucket prepareMessages;
     // Consensus instance -> Round -> List of commit messages
     private final MessageBucket commitMessages;
 
     // private final ByzantineBucket roundChangeMessages;
     private final HashSet<RoundChangeMessage> roundChangeMessages;
 
-    private Map<Integer, String> commitedValues; 
+    private Map<Integer, String> commitedValues;
 
     // Store if already received pre-prepare for a given <consensus, round>
     private final Map<Integer, Map<Integer, Boolean>> receivedPrePrepare = new ConcurrentHashMap<>();
@@ -89,15 +89,12 @@ public class NodeService implements UDPService {
     // Map of consensus instances to client data, used for consensus messages
     private Map<Integer, String> consensusToDataMapping = new ConcurrentHashMap<>();
     // Map of clientID strings to client balances, used for balanceRequests
-    private Map<String, Float> clientBalances = new ConcurrentHashMap<>();
+    protected Map<String, Float> clientBalances = new ConcurrentHashMap<>();
     // Map of used request IDs to client IDs, used for checking if a request ID has
     // already been used
     private Map<String, Integer> lastUsedRequestIDs = new ConcurrentHashMap<>();
 
     private Map<String, Float> nodeBalances = new ConcurrentHashMap<>();
-    // Map of used request IDs to client IDs, used for checking if a request ID has
-    // already been used
-    private Map<String, Integer> lastUsedRequestIDs = new ConcurrentHashMap<>();
 
     // if the rules have been done already
     private boolean rule1 = false;
@@ -106,12 +103,15 @@ public class NodeService implements UDPService {
 
     private int quorum;
 
+    protected int initialDelayInSeconds = 15; // Wait 15 seconds before the first consensus
+    protected int intervalInSeconds = 15; // Consensus every 15 seconds
+
     // Blockchain and transaction related fields
     private Blockchain blockchain;
 
     private ConcurrentLinkedQueue<ClientData> transactionQueue = new ConcurrentLinkedQueue<>();
 
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    protected final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
     private Map<String, Float> currencyUsedInBlock = new ConcurrentHashMap<>();
 
@@ -119,8 +119,7 @@ public class NodeService implements UDPService {
 
     private int nextBlock;
 
-    private Map<Integer, Block> blockNumberToBlockMapping = new ConcurrentHashMap<>();
-
+    protected Map<Integer, Block> blockNumberToBlockMapping = new ConcurrentHashMap<>();
 
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig leaderConfig, ProcessConfig[] nodesConfig) {
@@ -133,7 +132,7 @@ public class NodeService implements UDPService {
         this.prepareMessages = new MessageBucket(nodesConfig.length);
         this.commitMessages = new MessageBucket(nodesConfig.length);
         this.roundChangeMessages = new HashSet<RoundChangeMessage>();
-        
+
         this.commitedValues = new HashMap<Integer, String>();
 
         this.timeout = 5000;
@@ -153,12 +152,19 @@ public class NodeService implements UDPService {
         link.send(nodeId, message);
     }
 
+    protected void addToTransactionQueue(ClientData transaction) {
+        transactionQueue.offer(transaction);
+    }
+
+    public Blockchain getBlockchain() {
+        return this.blockchain;
+    }
+
     public void initialiseClientBalances(ProcessConfig[] clientConfigs) {
         for (ProcessConfig nodeConfig : nodesConfig) {
             nodeBalances.put(nodeConfig.getId(), (float) 0);
         }
         System.out.println("Starting node balances: " + nodeBalances); // Print at start for demo simplicity
-
 
         for (ProcessConfig clientConfig : clientConfigs) {
             clientBalances.put(clientConfig.getId(), clientConfig.getStartBalance());
@@ -215,7 +221,6 @@ public class NodeService implements UDPService {
             }
         }
     }
-
 
     public void sendRoundChangeMessage(int round) {
         int localConsensusInstance = this.consensusInstance.get();
@@ -276,8 +281,8 @@ public class NodeService implements UDPService {
                         config.getId(), message.getSenderId(), message.getConsensusInstance(), message.getRound()));
 
         // if (message.getPreparedValue() != null) {
-        //     System.out.println("RoundChangeMessage is not valid");
-        //     return;
+        // System.out.println("RoundChangeMessage is not valid");
+        // return;
         // }
 
         roundChangeMessages.add(message);
@@ -309,7 +314,8 @@ public class NodeService implements UDPService {
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
 
-            this.link.broadcast(this.createConsensusMessage(blockHash, localConsensusInstance, instance.getCurrentRound()));
+            this.link.broadcast(
+                    this.createConsensusMessage(blockHash, localConsensusInstance, instance.getCurrentRound()));
 
             startTimer();
         }
@@ -339,7 +345,7 @@ public class NodeService implements UDPService {
         String val = commitedValues.get(message.getConsensusInstance());
         if (val != null) {
             CommitMessage c = new CommitMessage(val);
-            
+
             ConsensusMessage m = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
                     .setConsensusInstance(message.getConsensusInstance())
                     .setRound(message.getRound())
@@ -348,7 +354,7 @@ public class NodeService implements UDPService {
                     .setMessage(c.toJson())
                     .build();
 
-                link.send(message.getSenderId(), m);
+            link.send(message.getSenderId(), m);
         }
     }
 
@@ -462,23 +468,22 @@ public class NodeService implements UDPService {
      * @param inputValue Value to value agreed upon
      */
     public void startConsensus() {
-        System.out.println("Start consensus");
+        System.out.println("Starting consensus");
 
         // Create new block
         Block block = this.blockCreator();
-        
 
         synchronized (block) {
             Iterator<ClientData> iterator = block.getTransactions().iterator();
             while (iterator.hasNext()) {
                 ClientData transaction = iterator.next();
                 if (!authorizeClientTransaction(transaction)) {
-                    iterator.remove(); 
+                    iterator.remove();
                 }
             }
         }
 
-        // Needs to be cleared before next block. 
+        // Needs to be cleared before next block.
         this.currencyUsedInBlock.clear();
 
         this.blockNumberToBlockMapping.put(block.getBLOCK_ID(), block);
@@ -534,8 +539,7 @@ public class NodeService implements UDPService {
 
     }
 
-    public boolean authorizeClientTransaction(ClientData transactionData) { // ! Add verification of request ID as
-                                                                            // nonce, right in sequence
+    public boolean authorizeClientTransaction(ClientData transactionData) {
         // Verify message signature, checks that source is the client
         if (!verifyClientData(transactionData)) {
             System.out.println("Transaction is not valid");
@@ -547,19 +551,20 @@ public class NodeService implements UDPService {
         String destination = transferContent[1];
         String requestID = transferContent[2];
         String source = transactionData.getClientID();
-        
+
         if (clientBalances.getOrDefault(source, 0.0f) < amount) {
             System.out.println("Client does not have enough balance to send the amount");
             return false;
         }
 
-        // Check that the transaction together with other transactions lead to overspending. 
-        if (this.currencyUsedInBlock.containsKey(clientId) && amount + this.currencyUsedInBlock.get(clientId) > this.clientBalances.get(clientId)){
-            System.out.println("Client does not have enough balance to send the amount and other transaction(s) in this block");
+        // Check that the transaction together with other transactions lead to
+        // overspending.
+        if (this.currencyUsedInBlock.containsKey(clientId)
+                && amount + this.currencyUsedInBlock.get(clientId) > this.clientBalances.get(clientId)) {
+            System.out.println(
+                    "Client does not have enough balance to send the amount and other transaction(s) in this block");
             return false;
         }
-
-
 
         // Check that destination is a valid client, meaning is in the clientBalances
         if (!clientBalances.containsKey(destination)) {
@@ -677,7 +682,6 @@ public class NodeService implements UDPService {
                         "{0} - Received PREPARE message from {1}: Consensus Instance {2}, Round {3}",
                         config.getId(), senderId, consensusInstance, round));
 
-
         // Doesn't add duplicate messages
         prepareMessages.addMessage(message);
 
@@ -772,7 +776,6 @@ public class NodeService implements UDPService {
                 MessageFormat.format("{0} - Received COMMIT message from {1}: Consensus Instance {2}, Round {3}",
                         config.getId(), message.getSenderId(), consensusInstance, round));
 
-
         commitMessages.addMessage(message);
 
         instance = this.instanceInfo.get(consensusInstance);
@@ -801,10 +804,7 @@ public class NodeService implements UDPService {
         Optional<String> commitValue = commitMessages.hasValidCommitQuorum(config.getId(),
                 consensusInstance, round);
 
-        System.out.println("Checking COMMIT message");
-
         if (commitValue.isPresent() && instance.getCommittedRound() < round) {
-            System.out.println("Value to commit: " + commitValue.get());
             Optional<ConsensusMessage> prepMessage = this.commitMessages.getMessages(consensusInstance, round).values()
                     .stream()
                     .filter(entry -> entry.deserializeCommitMessage().getValue()
@@ -817,13 +817,14 @@ public class NodeService implements UDPService {
             }
 
             String commitedBlockHash = prepMessage.get().deserializeCommitMessage().getValue();
+
             cancelTimer();
+
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
-            
 
             // Check if block excist locally. Otherwise, wait for it
-            while (!blockNumberToBlockMapping.containsKey(this.nextBlock)){
+            while (!blockNumberToBlockMapping.containsKey(this.nextBlock)) {
                 System.out.println("Block is not up next, wait for synchronization");
                 System.out.println(this.nextBlock);
                 try {
@@ -834,21 +835,20 @@ public class NodeService implements UDPService {
             }
 
             Block blockToBeExecuted = this.blockNumberToBlockMapping.get(this.nextBlock);
-            synchronized (this.blockchain){
+            synchronized (this.blockchain) {
                 String localBlockHash;
                 try {
                     localBlockHash = Blockchain.calculateHash(blockToBeExecuted);
-                    if (commitedBlockHash.equals(localBlockHash))
+                    if (commitedBlockHash.equals(localBlockHash)) {
                         this.blockchain.addBlock(blockToBeExecuted);
-                        this.commitedValues.put(localConsensusInstance, localBlockHash);
+                    }
+                    this.commitedValues.put(localConsensusInstance, localBlockHash);
                 } catch (NoSuchAlgorithmException | IOException e) {
                     e.printStackTrace();
                     System.out.println("Something wrong happened while appending block");
                     return;
                 }
             }
-
-
 
             lastDecidedConsensusInstance.getAndIncrement();
 
@@ -857,44 +857,58 @@ public class NodeService implements UDPService {
                             "{0} - Decided on Consensus Instance {1}, Round {2}, Successful? {3}",
                             config.getId(), consensusInstance, round, true));
 
+            blockToBeExecuted.forEachTransaction(transaction -> {
+                executeTransaction(transaction);
+            });
 
-            blockToBeExecuted.forEachTransaction(transaction -> {executeTransaction(transaction);});
-            
             // Remove to avoid unneccessary overhead
-            this.blockNumberToBlockMapping.remove(nextBlock);           
-            
+            this.blockNumberToBlockMapping.remove(nextBlock);
+
             nextBlock = nextBlock + 1;
         }
     }
 
-
-    public void executeTransaction(ClientData transaction){
-    
-        // TODO could add message for receiver to notify that received money. Would need
-        // to get quorum for this.
+    public void executeTransaction(ClientData transaction) {
 
         // Update sender and receiver balances
-        String[] transferContent = transaction.getValue().split(" ");
-        String amount = transferContent[0];
-        String destination = transferContent[1];
-        String requestId = transferContent[2];
+        String[] transferContent;
+        String amount;
+        String destination;
+        String requestId;
+        try {
+            transferContent = transaction.getValue().split(" ");
+            amount = transferContent[0];
+            destination = transferContent[1];
+            requestId = transferContent[2];
+        } catch (Exception e) {
+            System.out.println("Transaction data on wrong format");
+            return;
+        }
 
+        if (!clientBalances.containsKey(destination)) {
+            System.out.println("Client does not exist");
+            return;
+        }
+        if (clientBalances.get(transaction.getClientID()) < Float.parseFloat(amount)) {
+            System.out.println("Client does not have enough balance to send the amount");
+            return;
+        }
+        if (Float.parseFloat(amount) < 0) {
+            System.out.println("Amount is negative");
+            return;
+        }
 
-        Double a = Float.parseFloat(amount)*0.9;
-        Float amountToTransfer = a.floatValue();
-
+        Float amountToTransfer = Float.parseFloat(amount);
+        Double feeAmount = Float.parseFloat(amount) * 0.1;
+        Float fee = feeAmount.floatValue();
 
         // Update sender balance
         float senderBalance = clientBalances.getOrDefault(transaction.getClientID(), 0.0f);
         clientBalances.put(transaction.getClientID(), senderBalance - amountToTransfer);
 
-        // Update sender balance
-        float senderBalance = clientBalances.getOrDefault(transaction.getClientID(), 0.0f);
-        clientBalances.put(transaction.getClientID(), senderBalance - Float.parseFloat(amount));
-
         // Update receiver balance
         float receiverBalance = clientBalances.getOrDefault(destination, 0.0f);
-        clientBalances.put(destination, receiverBalance + Float.parseFloat(amount));
+        clientBalances.put(destination, receiverBalance + amountToTransfer - fee);
         // Upate last used request ID
         lastUsedRequestIDs.put(transaction.getClientID(), Integer.parseInt(requestId));
 
@@ -902,13 +916,9 @@ public class NodeService implements UDPService {
         confirmationMessage.setClientData(transaction);
         link.send(transaction.getClientID(), confirmationMessage);
 
-
         // Pay the leader
-        a = Float.parseFloat(amount)*0.1;
-        amountToTransfer = a.floatValue();
         float leaderBalance = nodeBalances.getOrDefault(this.leaderConfig.getId(), 0.0f);
-        nodeBalances.put(this.leaderConfig.getId(), leaderBalance + amountToTransfer);
-
+        nodeBalances.put(this.leaderConfig.getId(), leaderBalance + fee);
 
     }
 
@@ -943,10 +953,10 @@ public class NodeService implements UDPService {
         this.transactionQueue.offer(transferData);
     }
 
-    private Block blockCreator(){
-        
+    protected Block blockCreator() {
+
         Block block = new Block(this.blockNumber.getAndIncrement());
-        
+
         String prevHash;
 
         try {
@@ -957,10 +967,10 @@ public class NodeService implements UDPService {
         }
 
         // Put all waiting transactions into block or till it's full
-        while (this.transactionQueue.peek() != null || !block.isFull()){
+        while (this.transactionQueue.peek() != null || !block.isFull()) {
             block.addTransaction(this.transactionQueue.poll());
         }
-        
+
         return block;
 
     }
@@ -972,7 +982,6 @@ public class NodeService implements UDPService {
         }
 
         clientRequestQueue.offer(clientData);
-        
 
         // Get the local balance of the id that the client is requesting
         String balanceUser = clientData.getValue().split(" ")[0];
@@ -1000,18 +1009,19 @@ public class NodeService implements UDPService {
         }
 
         // Send the balance back to the client
-        BalanceMessage balanceMessage = new BalanceMessage(balance, clientData.getRequestID(),
-                clientData.getClientID(), config.getId(), Message.Type.BALANCE_RESPONSE);
+        BalanceMessage balanceMessage = new BalanceMessage(config.getId(), Message.Type.BALANCE_RESPONSE);
+        balanceMessage.setClientId(clientData.getClientID());
+        balanceMessage.setBalance(balance);
         balanceMessage.setRequestedClient(balanceUser);
+        balanceMessage.setRequestId(clientData.getRequestID());
 
         link.send(clientData.getClientID(), balanceMessage);
     }
 
     public void startConsensusWithTimer() {
-        int initialDelayInSeconds = 15; // Wait 15 seconds before the first consensus
-        int intervalInSeconds = 15; // Consensus every 15 seconds
         System.out.println("Consensus timer expired. Start consensus");
-        scheduler.scheduleWithFixedDelay(() -> startConsensus(), initialDelayInSeconds, intervalInSeconds, TimeUnit.SECONDS);
+        scheduler.scheduleWithFixedDelay(() -> startConsensus(), initialDelayInSeconds, intervalInSeconds,
+                TimeUnit.SECONDS);
     }
 
     @Override
