@@ -95,9 +95,6 @@ public class NodeService implements UDPService {
     private Map<String, Integer> lastUsedRequestIDs = new ConcurrentHashMap<>();
 
     private Map<String, Float> nodeBalances = new ConcurrentHashMap<>();
-    // Map of used request IDs to client IDs, used for checking if a request ID has
-    // already been used
-    private Map<String, Integer> lastUsedRequestIDs = new ConcurrentHashMap<>();
 
     // if the rules have been done already
     private boolean rule1 = false;
@@ -168,7 +165,6 @@ public class NodeService implements UDPService {
             nodeBalances.put(nodeConfig.getId(), (float) 0);
         }
         System.out.println("Starting node balances: " + nodeBalances); // Print at start for demo simplicity
-
 
         for (ProcessConfig clientConfig : clientConfigs) {
             clientBalances.put(clientConfig.getId(), clientConfig.getStartBalance());
@@ -874,9 +870,6 @@ public class NodeService implements UDPService {
 
     public void executeTransaction(ClientData transaction) {
 
-        // TODO could add message for receiver to notify that received money. Would need
-        // to get quorum for this.
-
         // Update sender and receiver balances
         String[] transferContent;
         String amount;
@@ -905,22 +898,17 @@ public class NodeService implements UDPService {
             return;
         }
 
-
-        Double a = Float.parseFloat(amount)*0.9;
-        Float amountToTransfer = a.floatValue();
-
+        Float amountToTransfer = Float.parseFloat(amount);
+        Double feeAmount = Float.parseFloat(amount) * 0.1;
+        Float fee = feeAmount.floatValue();
 
         // Update sender balance
         float senderBalance = clientBalances.getOrDefault(transaction.getClientID(), 0.0f);
         clientBalances.put(transaction.getClientID(), senderBalance - amountToTransfer);
 
-        // Update sender balance
-        float senderBalance = clientBalances.getOrDefault(transaction.getClientID(), 0.0f);
-        clientBalances.put(transaction.getClientID(), senderBalance - Float.parseFloat(amount));
-
         // Update receiver balance
         float receiverBalance = clientBalances.getOrDefault(destination, 0.0f);
-        clientBalances.put(destination, receiverBalance + Float.parseFloat(amount));
+        clientBalances.put(destination, receiverBalance + amountToTransfer - fee);
         // Upate last used request ID
         lastUsedRequestIDs.put(transaction.getClientID(), Integer.parseInt(requestId));
 
@@ -928,13 +916,9 @@ public class NodeService implements UDPService {
         confirmationMessage.setClientData(transaction);
         link.send(transaction.getClientID(), confirmationMessage);
 
-
         // Pay the leader
-        a = Float.parseFloat(amount)*0.1;
-        amountToTransfer = a.floatValue();
         float leaderBalance = nodeBalances.getOrDefault(this.leaderConfig.getId(), 0.0f);
-        nodeBalances.put(this.leaderConfig.getId(), leaderBalance + amountToTransfer);
-
+        nodeBalances.put(this.leaderConfig.getId(), leaderBalance + fee);
 
     }
 
@@ -1025,9 +1009,11 @@ public class NodeService implements UDPService {
         }
 
         // Send the balance back to the client
-        BalanceMessage balanceMessage = new BalanceMessage(balance, clientData.getRequestID(),
-                clientData.getClientID(), config.getId(), Message.Type.BALANCE_RESPONSE);
+        BalanceMessage balanceMessage = new BalanceMessage(config.getId(), Message.Type.BALANCE_RESPONSE);
+        balanceMessage.setClientId(clientData.getClientID());
+        balanceMessage.setBalance(balance);
         balanceMessage.setRequestedClient(balanceUser);
+        balanceMessage.setRequestId(clientData.getRequestID());
 
         link.send(clientData.getClientID(), balanceMessage);
     }

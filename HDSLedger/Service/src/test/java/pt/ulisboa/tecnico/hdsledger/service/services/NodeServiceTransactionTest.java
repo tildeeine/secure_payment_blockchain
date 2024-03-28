@@ -1,5 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
+import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -93,7 +95,9 @@ public class NodeServiceTransactionTest extends NodeServiceBaseTest {
 
         // Check that the balances were updated correctly
         assertEquals(80f, nodeService.clientBalances.getOrDefault("client1", 0.0f));
-        assertEquals(120f, nodeService.clientBalances.getOrDefault("client2", 0.0f));
+        Double result = 120 - (20 * 0.1);
+        Float receiverBalance = result.floatValue();
+        assertEquals(receiverBalance, nodeService.clientBalances.getOrDefault("client2", 0.0f));
     }
 
     // Test client trying to send more money than they have
@@ -187,7 +191,9 @@ public class NodeServiceTransactionTest extends NodeServiceBaseTest {
 
         // Check that only the first transaction was successful
         assertEquals(80f, nodeService.clientBalances.getOrDefault("client1", 0.0f));
-        assertEquals(120f, nodeService.clientBalances.getOrDefault("client2", 0.0f));
+        Double result = 120 - (20 * 0.1);
+        Float receiverBalance = result.floatValue();
+        assertEquals(receiverBalance, nodeService.clientBalances.getOrDefault("client2", 0.0f));
         assertEquals(100f, nodeService.clientBalances.getOrDefault("client3", 0.0f));
     }
 
@@ -271,7 +277,10 @@ public class NodeServiceTransactionTest extends NodeServiceBaseTest {
         assertTrue(latestBlock.getTransactions().contains(clientData),
                 "Transaction was not committed to the blockchain");
         assertEquals(80f, nodeService.clientBalances.get("client1"), "Client1 balance not updated correctly");
-        assertEquals(120f, nodeService.clientBalances.get("client2"), "Client2 balance not updated correctly");
+        Double result = 120 - (20 * 0.1);
+        Float receiverBalance = result.floatValue();
+        assertEquals(receiverBalance, nodeService.clientBalances.get("client2"),
+                "Client2 balance not updated correctly");
     }
 
 }
