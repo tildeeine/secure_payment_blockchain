@@ -23,13 +23,10 @@ import com.google.gson.Gson;
 
 public class TestableNodeService extends NodeService {
 
-    private Link link;
-
     public TestableNodeService(Link link, ProcessConfig nodeConfig, ProcessConfig leaderConfig,
             ProcessConfig[] nodesConfig) {
         // Add clients configs to the link, so node can send messages to clients
         super(link, nodeConfig, leaderConfig, nodesConfig);
-        this.link = link;
     }
 
     @Override

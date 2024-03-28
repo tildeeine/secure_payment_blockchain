@@ -60,6 +60,8 @@ import pt.ulisboa.tecnico.hdsledger.communication.RoundChangeMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.Authenticate;
 import pt.ulisboa.tecnico.hdsledger.service.blockchain.Block;
 import pt.ulisboa.tecnico.hdsledger.service.blockchain.Blockchain;
+import pt.ulisboa.tecnico.hdsledger.client.services.ClientService;
+import pt.ulisboa.tecnico.hdsledger.client.models.ClientMessageBuilder;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @ExtendWith(MockitoExtension.class)
@@ -71,10 +73,10 @@ public class DependabilityTest {
 
     private ProcessConfig[] nodeConfigs;
     private ProcessConfig[] clientConfigs;
+    private ProcessConfig leaderConfig;
 
     private static String leaderId = "1";
     private static String testNodeId = "2";
-    private static String byzantineNodeId = "3";
     private static String clientId = "client1";
 
     private static Link linkSpy;
@@ -82,6 +84,7 @@ public class DependabilityTest {
     private static PrivateKey clientKey;
 
     private Map<String, TestableNodeService> allNodes = new HashMap<>();
+    private ClientService clientService = null;
 
     @BeforeAll
     public static void setUpAll() {
@@ -119,7 +122,7 @@ public class DependabilityTest {
     public TestableNodeService testNodeSetup(String id) {
         nodeConfigs = new ProcessConfigBuilder().fromFile(nodesConfigPath);
         clientConfigs = new ProcessConfigBuilder().fromFile(clientsConfigPath);
-        ProcessConfig leaderConfig = Arrays.stream(nodeConfigs)
+        leaderConfig = Arrays.stream(nodeConfigs)
                 .filter(ProcessConfig::isLeader)
                 .findAny()
                 .get();
@@ -170,13 +173,34 @@ public class DependabilityTest {
 
     }
 
+    public void setupClient() {
+        // Set up client service
+        ProcessConfig clientConfig = Arrays.stream(clientConfigs)
+                .filter(c -> c.getId().equals(clientId))
+                .findAny()
+                .get();
+        Link link = new Link(clientConfig, clientConfig.getPort(), nodeConfigs, ConsensusMessage.class);
+
+        clientService = new ClientService(link, clientConfig, leaderConfig, nodeConfigs);
+        ClientMessageBuilder clientMessageBuilder = new ClientMessageBuilder(clientConfig);
+        // Start a thread to listen for messages from nodes
+        // Listen for incoming messages from nodes
+        clientService.listen();
+
+    }
+
     @AfterEach
     void tearDown() {
         if (allNodes != null) {
             for (TestableNodeService node : allNodes.values()) {
+                System.out.println("Shutting down node " + node.getConfig().getId());
                 node.shutdown();
             }
             allNodes.clear(); // Clear the map after all nodes have been shut down
+        }
+        if (clientService != null) {
+            clientService.shutdown();
+            clientService = null;
         }
         Mockito.reset(linkSpy);
     }
@@ -226,20 +250,23 @@ public class DependabilityTest {
                 && ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
     }
 
-    // Test that a byzantine leader sends conflicting pre-prepare messages
+    // Test a byzantine leader sending conflicting pre-prepare messages
+    // Should result in a round change
+    // Will generate some socket exceptions, ignore them
     @Test
     @Order(2)
     public void testConflictingLeaderPrePrepareMessages() {
         System.out.println("Testing Byzantine leader sending conflicting pre-prepare messages...");
 
         setupAllNodes();
+        setupClient();
 
         // Get leader node
         TestableNodeService leader = allNodes.get(leaderId);
 
         // Simulate Byzantine leader sending conflicting pre-prepare messages
         int consensusInstance = nodeService.getConsensusInstance().get();
-        int round = 1;
+        int round = 2;
 
         // Create a PrepareMessage object. Assume leader is Byzantine and does not have
         // the correct block hash
@@ -248,18 +275,21 @@ public class DependabilityTest {
 
         for (Map.Entry<String, TestableNodeService> entry : allNodes.entrySet()) {
             TestableNodeService node = entry.getValue();
-
+            node.listen();
+            if (node.getConfig().getId().equals(leaderId)) {
+                continue;
+            }
             node.startConsensus();
         }
+        // Send the conflicting pre-prepare message to all nodes
         for (Map.Entry<String, TestableNodeService> entry : allNodes.entrySet()) {
             TestableNodeService node = entry.getValue();
 
-            ConsensusMessage consensusMessage = new ConsensusMessageBuilder(leaderId, Message.Type.PREPARE)
+            ConsensusMessage consensusMessage = new ConsensusMessageBuilder(leaderId, Message.Type.PRE_PREPARE)
                     .setConsensusInstance(consensusInstance)
                     .setRound(round)
                     .setMessage(preprepareMessageJson) // Pass the serialized PrepareMessage JSON here
                     .build();
-            node.setupInstanceInfoForBlock("incorrectBlockHash", 1);
             node.uponPrePrepare(consensusMessage);
         }
 
@@ -272,35 +302,54 @@ public class DependabilityTest {
         }
 
         // Verify that round change is performed
-        verify(linkSpy, times(8)).send(anyString(), argThat(argument -> argument instanceof RoundChangeMessage
-                && ((RoundChangeMessage) argument).getType() == Message.Type.ROUND_CHANGE));
+        verify(linkSpy, times(nodeConfigs.length)).send(anyString(),
+                argThat(argument -> argument instanceof RoundChangeMessage
+                        && ((RoundChangeMessage) argument).getType() == Message.Type.ROUND_CHANGE));
         assertEquals(false, nodeService.isLeader(leaderId));
         assertEquals(true, nodeService.isLeader("2"));
 
     }
 
-    // Test that a byzantine node sends conflicting prepare messages
+    // Test a "complete" run of the system, from handleTransfer to block added
     @Test
     @Order(3)
-    public void testConflictingNodePrepareMessages() {
-        System.out.println("Testing Byzantine node sending conflicting prepare messages...");
-
-    }
-
-    // Test that a byzantine node sends conflicting commit messages
-    @Test
-    @Order(4)
-    public void testConflictingNodeCommitMessages() {
-        System.out.println("Testing Byzantine node sending conflicting commit messages...");
-
-    }
-
-    // Test a "complete" run of the system, from handleTransfer to final blockchain
-    @Test
-    @Order(5)
     public void testCompleteRun() {
         System.out.println("Testing complete run of the system...");
 
+        setupAllNodes();
+        setupClient();
+        nodeService.initialiseClientBalances(clientConfigs);
+
+        // Set up clientservice
+
+        ClientData clientData = setupClientData("20 client2 1");
+        ClientMessage transferMessage = new ClientMessage(clientData.getClientID(), Message.Type.TRANSFER);
+        transferMessage.setClientData(clientData);
+
+        // Simulate client broadcasting transfer message
+        for (Map.Entry<String, TestableNodeService> entry : allNodes.entrySet()) {
+            TestableNodeService node = entry.getValue();
+            node.initialiseClientBalances(clientConfigs);
+            node.handleTransfer(transferMessage);
+            node.startConsensus();
+            node.listen();
+        }
+
+        // Wait 7 seconds for block to be added to blockchain
+        try {
+            System.out.println("Waiting for consensus to complete...");
+            Thread.sleep(6000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            e.printStackTrace();
+        }
+
+        // Verify that the block was added to the blockchain
+        Block latestBlock = nodeService.getBlockchain().getLatestBlock();
+        assertTrue(latestBlock.getTransactions().contains(clientData),
+                "Transaction was not committed to the blockchain");
+        assertEquals(80f, nodeService.clientBalances.get("client1"), "Client1 balance not updated correctly");
+        assertEquals(120f, nodeService.clientBalances.get("client2"), "Client2 balance not updated correctly");
     }
 
 }

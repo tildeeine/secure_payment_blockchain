@@ -59,7 +59,7 @@ public class NodeService implements UDPService {
     private ProcessConfig leaderConfig;
 
     // Link to communicate with nodes
-    private final Link link;
+    protected final Link link;
 
     private Timer timer;
 
@@ -666,7 +666,7 @@ public class NodeService implements UDPService {
         int round = message.getRound();
         String senderId = message.getSenderId();
 
-        PrepareMessage prepareMessage = message.deserializePrepareMessage();// ! issue
+        PrepareMessage prepareMessage = message.deserializePrepareMessage();
 
         String blockHash = prepareMessage.getValue();
 

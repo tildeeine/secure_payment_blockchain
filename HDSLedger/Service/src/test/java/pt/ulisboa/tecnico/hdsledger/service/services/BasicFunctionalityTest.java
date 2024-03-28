@@ -17,6 +17,7 @@ import org.mockito.Mockito;
 
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.ArgumentMatchers.*;
 import org.mockito.Spy;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -155,6 +156,8 @@ public class BasicFunctionalityTest {
 
         ClientData clientData = setupClientData("20 client2 1");
         String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
+        // Prevent the real send method from being called on the spy
+        doNothing().when(linkSpy).send(anyString(), any(ConsensusMessage.class));
 
         // Assuming setupInstanceInfoForBlock has already been called inside
         // addToTransactionQueueAndCreateBlock
@@ -190,6 +193,9 @@ public class BasicFunctionalityTest {
         System.out.println("Update leader test...");
         String newLeaderId = "2";
 
+        // Prevent the real send method from being called on the spy
+        doNothing().when(linkSpy).send(anyString(), any(ConsensusMessage.class));
+
         // Increment the current round to simulate a round change
         int initialConsensusInstance = nodeService.getConsensusInstance().get();
 
@@ -211,6 +217,8 @@ public class BasicFunctionalityTest {
     @Test
     public void testCommitOnPrepareQuorum() {
         System.out.println("Commit on valid quorum...");
+        // Prevent the real send method from being called on the spy
+        doNothing().when(linkSpy).send(anyString(), any(ConsensusMessage.class));
 
         ClientData clientData = setupClientData("20 client2 1");
         String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
@@ -230,6 +238,8 @@ public class BasicFunctionalityTest {
     @Test
     public void testClientBalances() {
         System.out.println("Client balances test");
+        // Prevent the real send method from being called on the spy
+        doNothing().when(linkSpy).send(anyString(), any(ConsensusMessage.class));
 
         // Set up client balances
         nodeService.initialiseClientBalances(clientConfigs);
