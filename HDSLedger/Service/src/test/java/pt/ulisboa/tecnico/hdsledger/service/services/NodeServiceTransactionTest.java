@@ -233,4 +233,45 @@ public class NodeServiceTransactionTest extends NodeServiceBaseTest {
         assertEquals(1, nodeService.getBlockchain().getLength());
     }
 
+    // Test a "complete" run of the system, from handleTransfer to block added
+    @Test
+    public void testCompleteRun() {
+        System.out.println("Testing complete run of the system...");
+
+        super.setupAllNodes();
+        super.setupClient();
+        nodeService.initialiseClientBalances(super.clientConfigs);
+
+        // Set up clientservice
+
+        ClientData clientData = super.setupClientData("20 client2 1");
+        ClientMessage transferMessage = new ClientMessage(clientData.getClientID(), Message.Type.TRANSFER);
+        transferMessage.setClientData(clientData);
+
+        // Simulate client broadcasting transfer message
+        for (Map.Entry<String, TestableNodeService> entry : allNodes.entrySet()) {
+            TestableNodeService node = entry.getValue();
+            node.initialiseClientBalances(super.clientConfigs);
+            node.handleTransfer(transferMessage);
+            node.startConsensus();
+            node.listen();
+        }
+
+        // Wait 7 seconds for block to be added to blockchain
+        try {
+            System.out.println("Waiting for consensus to complete...");
+            Thread.sleep(6000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            e.printStackTrace();
+        }
+
+        // Verify that the block was added to the blockchain
+        Block latestBlock = nodeService.getBlockchain().getLatestBlock();
+        assertTrue(latestBlock.getTransactions().contains(clientData),
+                "Transaction was not committed to the blockchain");
+        assertEquals(80f, nodeService.clientBalances.get("client1"), "Client1 balance not updated correctly");
+        assertEquals(120f, nodeService.clientBalances.get("client2"), "Client2 balance not updated correctly");
+    }
+
 }
