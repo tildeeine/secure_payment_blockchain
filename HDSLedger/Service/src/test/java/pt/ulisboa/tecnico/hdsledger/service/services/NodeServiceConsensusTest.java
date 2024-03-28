@@ -1,73 +1,44 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import org.mockito.Spy;
 import org.mockito.Mock;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.times;
-import org.mockito.MockitoAnnotations;
 import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.*;
-import org.mockito.Spy;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.junit.jupiter.MockitoExtension;
 import static org.mockito.Mockito.doNothing;
 
-import java.util.Arrays;
-
-import java.security.PrivateKey;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.KeyFactory;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.security.NoSuchAlgorithmException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.Map;
+
 import com.google.gson.Gson;
-import java.util.HashMap;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
-import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.builder.ConsensusMessageBuilder;
-import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
-import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
-import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfigBuilder;
-import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
-import pt.ulisboa.tecnico.hdsledger.communication.PrePrepareMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ClientData;
 import pt.ulisboa.tecnico.hdsledger.communication.ClientMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.PrePrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.RoundChangeMessage;
-import pt.ulisboa.tecnico.hdsledger.utilities.Authenticate;
-import pt.ulisboa.tecnico.hdsledger.service.blockchain.Block;
-import pt.ulisboa.tecnico.hdsledger.service.blockchain.Blockchain;
-import pt.ulisboa.tecnico.hdsledger.client.services.ClientService;
-import pt.ulisboa.tecnico.hdsledger.client.models.ClientMessageBuilder;
+import pt.ulisboa.tecnico.hdsledger.communication.builder.ConsensusMessageBuilder;
 
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+import pt.ulisboa.tecnico.hdsledger.service.blockchain.Block;
+import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
+import pt.ulisboa.tecnico.hdsledger.service.blockchain.Blockchain;
+
 public class NodeServiceConsensusTest extends NodeServiceBaseTest {
 
     // Test that a replayed message is not accepted for quorum
     @Test
-    @Order(1)
     private void testRejectReplayedMessage() {
         System.out.println("Reject replayed message");
 
@@ -98,7 +69,6 @@ public class NodeServiceConsensusTest extends NodeServiceBaseTest {
     // Should result in a round change
     // Will generate some socket exceptions, ignore them
     @Test
-    @Order(2)
     public void testConflictingLeaderPrePrepareMessages() {
         System.out.println("Testing Byzantine leader sending conflicting pre-prepare messages...");
 
