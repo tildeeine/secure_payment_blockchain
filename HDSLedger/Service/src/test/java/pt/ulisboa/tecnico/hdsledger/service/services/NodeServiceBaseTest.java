@@ -26,10 +26,9 @@ import static org.mockito.ArgumentMatchers.*;
 import org.mockito.Spy;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
+import static org.mockito.Mockito.doNothing;
 
 import java.util.Arrays;
-
-import javax.sound.sampled.AudioFileFormat.Type;
 
 import java.security.PrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -63,36 +62,51 @@ import pt.ulisboa.tecnico.hdsledger.service.blockchain.Blockchain;
 import pt.ulisboa.tecnico.hdsledger.client.services.ClientService;
 import pt.ulisboa.tecnico.hdsledger.client.models.ClientMessageBuilder;
 
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @ExtendWith(MockitoExtension.class)
-public class DependabilityTest {
-    private TestableNodeService nodeService;
+public abstract class NodeServiceBaseTest {
 
-    private static String nodesConfigPath = "src/test/resources/test_config.json";
-    private static String clientsConfigPath = "src/test/resources/client_test_config.json";
+    protected Map<String, TestableNodeService> allNodes = new HashMap<>();
+    protected static String nodesConfigPath = "src/test/resources/test_config.json";
+    protected static String clientsConfigPath = "src/test/resources/client_test_config.json";
+    protected static ProcessConfig[] nodeConfigs;
+    protected static ProcessConfig[] clientConfigs;
+    protected static ProcessConfig leaderConfig;
 
-    private ProcessConfig[] nodeConfigs;
-    private ProcessConfig[] clientConfigs;
-    private ProcessConfig leaderConfig;
+    protected static String leaderId = "1";
+    protected static String testNodeId = "2";
+    protected static String clientId = "client1";
+    protected static PrivateKey clientKey;
+    protected static Link linkSpy;
 
-    private static String leaderId = "1";
-    private static String testNodeId = "2";
-    private static String clientId = "client1";
-
-    private static Link linkSpy;
-
-    private static PrivateKey clientKey;
-
-    private Map<String, TestableNodeService> allNodes = new HashMap<>();
+    protected TestableNodeService nodeService;
     private ClientService clientService = null;
 
     @BeforeAll
-    public static void setUpAll() {
-        try {
-            getClientPrivateKey();
-        } catch (IOException e) {
-            System.out.println("Error reading client private key");
+    public static void setUpAll() throws Exception {
+        getClientPrivateKey();
+    }
+
+    @BeforeEach
+    void setUp() throws Exception {
+        nodeService = testNodeSetup(testNodeId);
+        allNodes.put(testNodeId, nodeService);
+        MockitoAnnotations.initMocks(this);
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (allNodes != null) {
+            for (TestableNodeService node : allNodes.values()) {
+                System.out.println("Shutting down node " + node.getConfig().getId());
+                node.shutdown();
+            }
+            allNodes.clear();
         }
+        if (clientService != null) {
+            clientService.shutdown();
+            clientService = null;
+        }
+        Mockito.reset(linkSpy);
     }
 
     public static void getClientPrivateKey() throws IOException {
@@ -109,14 +123,6 @@ public class DependabilityTest {
         } catch (Exception e) {
             System.out.println("Error reading client private key");
         }
-    }
-
-    @BeforeEach
-    void setUp() {
-        // Instantiate TestableNodeService
-        nodeService = testNodeSetup(testNodeId);
-        allNodes.put(testNodeId, nodeService);
-        MockitoAnnotations.initMocks(this);
     }
 
     public TestableNodeService testNodeSetup(String id) {
@@ -148,6 +154,24 @@ public class DependabilityTest {
             TestableNodeService node = nodeSetup(nodeConfig.getId());
             allNodes.put(nodeConfig.getId(), node);
         }
+    }
+
+    /// _______________________________________
+
+    public ClientData setupClientData(String value) {
+        // Set up client data
+        ClientData clientData = new ClientData();
+        clientData.setRequestID(1); // arbitrary number
+        clientData.setValue(value);
+        clientData.setClientID("client1");
+
+        try {
+            byte[] signature = Authenticate.signMessage(clientKey, clientData.getValue());
+            clientData.setSignature(signature);
+        } catch (Exception e) {
+            System.out.println("Error signing value");
+        }
+        return clientData;
     }
 
     // Function to set up all nodes in the network, for complete testing
@@ -186,127 +210,6 @@ public class DependabilityTest {
         // Start a thread to listen for messages from nodes
         // Listen for incoming messages from nodes
         clientService.listen();
-
-    }
-
-    @AfterEach
-    void tearDown() {
-        if (allNodes != null) {
-            for (TestableNodeService node : allNodes.values()) {
-                System.out.println("Shutting down node " + node.getConfig().getId());
-                node.shutdown();
-            }
-            allNodes.clear(); // Clear the map after all nodes have been shut down
-        }
-        if (clientService != null) {
-            clientService.shutdown();
-            clientService = null;
-        }
-        Mockito.reset(linkSpy);
-    }
-
-    public ClientData setupClientData(String value) {
-        // Set up client data
-        ClientData clientData = new ClientData();
-        clientData.setRequestID(1); // arbitrary number
-        clientData.setValue(value);
-        clientData.setClientID("client1");
-
-        try {
-            byte[] signature = Authenticate.signMessage(clientKey, clientData.getValue());
-            clientData.setSignature(signature);
-        } catch (Exception e) {
-            System.out.println("Error signing value");
-        }
-        return clientData;
-    }
-
-    // Test that a replayed message is not accepted for quorum
-    @Test
-    @Order(1)
-    private void testRejectReplayedMessage() {
-        System.out.println("Reject replayed message");
-
-        ClientData clientData = setupClientData("20 client2 1");
-        String blockHash = nodeService.addToTransactionQueueAndCreateBlock(clientData);
-
-        // Assuming setupInstanceInfoForBlock has already been called inside
-        // addToTransactionQueueAndCreateBlock
-        nodeService.sendPrepareMessages(blockHash, nodeService.getQuorum());
-
-        // Verify that the commit messages were sent
-        verify(linkSpy, times(nodeService.getQuorum())).send(anyString(),
-                argThat(argument -> argument instanceof ConsensusMessage
-                        && ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
-
-        // Reset the link spy to clear the interactions
-        Mockito.reset(linkSpy);
-
-        // Send the same prepare messages again
-        nodeService.sendPrepareMessages(blockHash, nodeService.getQuorum());
-
-        // Verify that no commit messages were sent
-        verify(linkSpy, times(0)).send(anyString(), argThat(argument -> argument instanceof ConsensusMessage
-                && ((ConsensusMessage) argument).getType() == Message.Type.COMMIT));
-    }
-
-    // Test a byzantine leader sending conflicting pre-prepare messages
-    // Should result in a round change
-    // Will generate some socket exceptions, ignore them
-    @Test
-    @Order(2)
-    public void testConflictingLeaderPrePrepareMessages() {
-        System.out.println("Testing Byzantine leader sending conflicting pre-prepare messages...");
-
-        setupAllNodes();
-        setupClient();
-
-        // Get leader node
-        TestableNodeService leader = allNodes.get(leaderId);
-
-        // Simulate Byzantine leader sending conflicting pre-prepare messages
-        int consensusInstance = nodeService.getConsensusInstance().get();
-        int round = 2;
-
-        // Create a PrepareMessage object. Assume leader is Byzantine and does not have
-        // the correct block hash
-        PrePrepareMessage prePrepareMessage = new PrePrepareMessage("incorrectBlockHash");
-        String preprepareMessageJson = new Gson().toJson(prePrepareMessage);
-
-        for (Map.Entry<String, TestableNodeService> entry : allNodes.entrySet()) {
-            TestableNodeService node = entry.getValue();
-            node.listen();
-            if (node.getConfig().getId().equals(leaderId)) {
-                continue;
-            }
-            node.startConsensus();
-        }
-        // Send the conflicting pre-prepare message to all nodes
-        for (Map.Entry<String, TestableNodeService> entry : allNodes.entrySet()) {
-            TestableNodeService node = entry.getValue();
-
-            ConsensusMessage consensusMessage = new ConsensusMessageBuilder(leaderId, Message.Type.PRE_PREPARE)
-                    .setConsensusInstance(consensusInstance)
-                    .setRound(round)
-                    .setMessage(preprepareMessageJson) // Pass the serialized PrepareMessage JSON here
-                    .build();
-            node.uponPrePrepare(consensusMessage);
-        }
-
-        // Wait 7 seconds for round change
-        try {
-            System.out.println("Waiting for round change...");
-            Thread.sleep(7000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-
-        // Verify that round change is performed
-        verify(linkSpy, times(nodeConfigs.length)).send(anyString(),
-                argThat(argument -> argument instanceof RoundChangeMessage
-                        && ((RoundChangeMessage) argument).getType() == Message.Type.ROUND_CHANGE));
-        assertEquals(false, nodeService.isLeader(leaderId));
-        assertEquals(true, nodeService.isLeader("2"));
 
     }
 
