@@ -58,7 +58,6 @@ public class ClientService implements UDPServiceClient {
 
     public void checkBalance(ClientMessage balanceRequest) {
         // Create message with balance request
-        System.out.println("request id" + balanceRequest.getClientData().getRequestID());// !
         String userKey = balanceRequest.getClientData().getValue();
         this.balanceRequestTracker.put(balanceRequest.getClientData().getRequestID(), new ConcurrentHashMap<>());
         link.broadcast(balanceRequest);
@@ -183,7 +182,7 @@ public class ClientService implements UDPServiceClient {
                                             MessageFormat.format("{0} - Received BALANCE response from {1}",
                                                     config.getId(), message.getSenderId()));
                                     // Verify that message is instance of BalanceMessage
-                                    if (!(message instanceof BalanceMessage)) { // ! this is called, response is invalid
+                                    if (!(message instanceof BalanceMessage)) {
                                         LOGGER.log(Level.INFO,
                                                 MessageFormat.format("{0} - Received invalid balance response from {1}",
                                                         config.getId(), message.getSenderId()));
