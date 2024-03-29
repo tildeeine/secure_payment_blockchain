@@ -109,7 +109,7 @@ public class NodeService implements UDPService {
     // Blockchain and transaction related fields
     private Blockchain blockchain;
 
-    private ConcurrentLinkedQueue<ClientData> transactionQueue = new ConcurrentLinkedQueue<>();
+    protected ConcurrentLinkedQueue<ClientData> transactionQueue = new ConcurrentLinkedQueue<>();
 
     protected final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
@@ -497,7 +497,6 @@ public class NodeService implements UDPService {
         }
 
         // Set initial consensus values
-
         int localConsensusInstance = getConsensusInstance().incrementAndGet();
         InstanceInfo existingConsensus = this.instanceInfo.put(localConsensusInstance,
                 new InstanceInfo(currentBlockHash));
@@ -521,7 +520,6 @@ public class NodeService implements UDPService {
 
         this.rule1 = false;
         this.rule2 = false;
-
         // Return if not leader
         if (!this.config.isLeader()) {
             LOGGER.log(Level.INFO,
@@ -575,8 +573,7 @@ public class NodeService implements UDPService {
         if (!(Integer.parseInt(requestID) > lastUsedRequestIDs.getOrDefault(source, 0))) { // if no registered
                                                                                            // requestIds, this is first
                                                                                            // request for user
-            // ? Should we handle differently than ignore? Doesn't handle our of order
-            // requests
+
             System.out.println("Request ID already used for this client, ignoring");
             return false;
         }
@@ -607,9 +604,17 @@ public class NodeService implements UDPService {
         int senderMessageId = message.getMessageId();
 
         PrePrepareMessage prePrepareMessage = message.deserializePrePrepareMessage();
-        this.consensusToDataMapping.put(consensusInstance, prePrepareMessage.getValue());
 
-        String blockHash = prePrepareMessage.getValue();
+        if (this.consensusToDataMapping.get(consensusInstance) == null) {
+            this.consensusToDataMapping.put(consensusInstance, prePrepareMessage.getValue());
+        }
+
+        String localBlockHash = consensusToDataMapping.get(consensusInstance);
+        String messageBlockHash = prePrepareMessage.getValue();
+        if (!localBlockHash.equals(messageBlockHash)) {
+            System.out.println(config.getId() + " Block hash is not the same");
+            return;
+        }
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
@@ -627,9 +632,8 @@ public class NodeService implements UDPService {
             System.out.println("PrePrepare message not justified");
             return;
         }
-
         // Set instance value
-        this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(blockHash));
+        this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(localBlockHash));
 
         // Within an instance of the algorithm, each upon rule is triggered at most once
         // for any round r
@@ -668,7 +672,6 @@ public class NodeService implements UDPService {
             System.out.println("No instance exists");
             return;
         }
-
         int consensusInstance = message.getConsensusInstance();
         int round = message.getRound();
         String senderId = message.getSenderId();
@@ -685,9 +688,15 @@ public class NodeService implements UDPService {
         // Doesn't add duplicate messages
         prepareMessages.addMessage(message);
 
-        // Set instance values
-        this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(blockHash));
-        instance = this.instanceInfo.get(consensusInstance);
+        // Set instance values//?
+        // this.instanceInfo.putIfAbsent(consensusInstance, new
+        // InstanceInfo(blockHash));
+        try {
+            instance = this.instanceInfo.get(consensusInstance);
+        } catch (Exception e) {
+            System.out.println("Error getting instance");
+            return;
+        }
 
         // Within an instance of the algorithm, each upon rule is triggered at most once
         // for any round r
@@ -826,7 +835,6 @@ public class NodeService implements UDPService {
             // Check if block excist locally. Otherwise, wait for it
             while (!blockNumberToBlockMapping.containsKey(this.nextBlock)) {
                 System.out.println("Block is not up next, wait for synchronization");
-                System.out.println(this.nextBlock);
                 try {
                     Thread.sleep(500);
                 } catch (InterruptedException e) {
@@ -919,7 +927,6 @@ public class NodeService implements UDPService {
         // Pay the leader
         float leaderBalance = nodeBalances.getOrDefault(this.leaderConfig.getId(), 0.0f);
         nodeBalances.put(this.leaderConfig.getId(), leaderBalance + fee);
-        System.out.println("Leader balance: " + nodeBalances.get(this.leaderConfig.getId()));// !
 
     }
 
@@ -930,6 +937,12 @@ public class NodeService implements UDPService {
         // Check if the signature is null and immediately return false if so
         if (signature == null) {
             System.out.println("Message has no signature and will be ignored.");
+            return false;
+        }
+        // Check if client is trying to transfer to itself
+        String[] transferContent = value.split(" ");
+        if (clientData.getClientID().equals(transferContent[1])) {
+            System.out.println("Client is trying to transfer to itself");
             return false;
         }
 
