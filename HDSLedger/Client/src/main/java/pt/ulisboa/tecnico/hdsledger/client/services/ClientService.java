@@ -46,7 +46,6 @@ public class ClientService implements UDPServiceClient {
         this.config = config;
         this.nodesConfig = nodesConfig;
         this.allowedFaults = numberOfFaults(nodesConfig.length);
-        System.out.println(this.allowedFaults);
         this.timeout = 5000;
     }
 
