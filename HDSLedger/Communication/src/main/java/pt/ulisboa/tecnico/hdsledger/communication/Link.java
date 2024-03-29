@@ -206,8 +206,9 @@ public class Link {
                 DatagramPacket packet = new DatagramPacket(data, data.length, hostname, port);
                 socket.send(packet);
             } catch (IOException e) {
-                e.printStackTrace();
-                throw new HDSSException(ErrorMessage.SocketSendingError);
+                System.out.println("Socket error while sending message to " + hostname + ":" + port);
+                // e.printStackTrace();
+                // throw new HDSSException(ErrorMessage.SocketSendingError);
             }
         }).start();
     }
@@ -280,7 +281,6 @@ public class Link {
 
         // message
         if (message.getType().equals(Message.Type.ACK)) {
-            System.out.println("Ack");
             receivedAcks.add(messageId);
             return message;
         }
@@ -344,8 +344,6 @@ public class Link {
 
             Message responseMessage = new Message(this.config.getId(), Message.Type.ACK);
             responseMessage.setMessageId(messageId);
-
-            System.out.println("Sending ack for " + messageId);
 
             // ACK is sent without needing for another ACK because
             // we're assuming an eventually synchronous network
