@@ -62,11 +62,11 @@ public abstract class NodeServiceBaseTest {
     protected static ProcessConfig[] clientConfigs;
     protected static ProcessConfig leaderConfig;
 
-    protected static String leaderId = "1";
     protected static String testNodeId = "2";
     protected static String clientId = "client1";
     protected static PrivateKey clientKey;
-    protected static Link linkSpy;
+    protected String leaderId = "1";
+    protected Link linkSpy;
 
     protected TestableNodeService nodeService;
     private ClientService clientService = null;

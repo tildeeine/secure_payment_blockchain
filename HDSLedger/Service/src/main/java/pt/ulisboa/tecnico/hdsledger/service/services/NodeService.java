@@ -56,7 +56,7 @@ public class NodeService implements UDPService {
     // Current node is leader
     private final ProcessConfig config;
     // Leader configuration
-    private ProcessConfig leaderConfig;
+    protected ProcessConfig leaderConfig;
 
     // Link to communicate with nodes
     protected final Link link;
@@ -94,7 +94,7 @@ public class NodeService implements UDPService {
     // already been used
     private Map<String, Integer> lastUsedRequestIDs = new ConcurrentHashMap<>();
 
-    private Map<String, Float> nodeBalances = new ConcurrentHashMap<>();
+    protected Map<String, Float> nodeBalances = new ConcurrentHashMap<>();
 
     // if the rules have been done already
     private boolean rule1 = false;
@@ -919,6 +919,7 @@ public class NodeService implements UDPService {
         // Pay the leader
         float leaderBalance = nodeBalances.getOrDefault(this.leaderConfig.getId(), 0.0f);
         nodeBalances.put(this.leaderConfig.getId(), leaderBalance + fee);
+        System.out.println("Leader balance: " + nodeBalances.get(this.leaderConfig.getId()));// !
 
     }
 

@@ -98,6 +98,9 @@ public class NodeServiceTransactionTest extends NodeServiceBaseTest {
         Double result = 120 - (20 * 0.1);
         Float receiverBalance = result.floatValue();
         assertEquals(receiverBalance, nodeService.clientBalances.getOrDefault("client2", 0.0f));
+        result = 20 * 0.1;
+        String leader = nodeService.leaderConfig.getId();
+        assertEquals(result.floatValue(), nodeService.nodeBalances.get(leader), "Leader balance not updated correctly");
     }
 
     // Test client trying to send more money than they have
@@ -121,6 +124,8 @@ public class NodeServiceTransactionTest extends NodeServiceBaseTest {
         // Check that the balances were not updated
         assertEquals(100f, nodeService.clientBalances.getOrDefault("client1", 0.0f));
         assertEquals(100f, nodeService.clientBalances.getOrDefault("client2", 0.0f));
+        String leader = nodeService.leaderConfig.getId();
+        assertEquals(0.0f, nodeService.nodeBalances.get(leader), "Leader balance not updated correctly");
     }
 
     // Test that a client can't send money to non-existent clients
@@ -141,6 +146,8 @@ public class NodeServiceTransactionTest extends NodeServiceBaseTest {
 
         // Check that the balances were not updated
         assertEquals(100f, nodeService.clientBalances.getOrDefault("client1", 0.0f));
+        String leader = nodeService.leaderConfig.getId();
+        assertEquals(0.0f, nodeService.nodeBalances.get(leader), "Leader balance not updated correctly");
     }
 
     // Test that a client can't send negative money
@@ -162,6 +169,8 @@ public class NodeServiceTransactionTest extends NodeServiceBaseTest {
         // Check that the balances were not updated
         assertEquals(100f, nodeService.clientBalances.getOrDefault("client1", 0.0f));
         assertEquals(100f, nodeService.clientBalances.getOrDefault("client2", 0.0f));
+        String leader = nodeService.leaderConfig.getId();
+        assertEquals(0.0f, nodeService.nodeBalances.get(leader), "Leader balance should not be updated");
     }
 
     // Test that double spending doesn't work
@@ -195,6 +204,9 @@ public class NodeServiceTransactionTest extends NodeServiceBaseTest {
         Float receiverBalance = result.floatValue();
         assertEquals(receiverBalance, nodeService.clientBalances.getOrDefault("client2", 0.0f));
         assertEquals(100f, nodeService.clientBalances.getOrDefault("client3", 0.0f));
+        result = 20 * 0.1;
+        String leader = nodeService.leaderConfig.getId();
+        assertEquals(result.floatValue(), nodeService.nodeBalances.get(leader), "Leader balance not updated correctly");
     }
 
     // Test that client data that is not signed is not accepted for quorum
@@ -242,7 +254,7 @@ public class NodeServiceTransactionTest extends NodeServiceBaseTest {
     // Test a "complete" run of the system, from handleTransfer to block added
     @Test
     public void testCompleteRun() {
-        System.out.println("Testing complete run of the system...");
+        System.out.println("Testing complete run of the system...__________________________________________________");
 
         super.setupAllNodes();
         super.setupClient();
@@ -281,6 +293,17 @@ public class NodeServiceTransactionTest extends NodeServiceBaseTest {
         Float receiverBalance = result.floatValue();
         assertEquals(receiverBalance, nodeService.clientBalances.get("client2"),
                 "Client2 balance not updated correctly");
+
+        result = 20 * 0.1;
+        String leader = nodeService.leaderConfig.getId();
+        assertEquals(result.floatValue(), nodeService.nodeBalances.get(leader), "Leader balance not updated correctly");
+    }
+
+    // Test that a node with the wrong balances before consensus gets updated
+    // balances after
+    @Test
+    public void testNodeWithWrongBalances() {
+        System.out.println("Testing node with wrong balances before consensus...");
     }
 
 }
