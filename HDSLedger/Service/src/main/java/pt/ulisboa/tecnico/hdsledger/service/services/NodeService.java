@@ -280,11 +280,6 @@ public class NodeService implements UDPService {
                         "{0} - Received ROUND_CHANGE message from {1} Consensus Instance {2}, Round {3}",
                         config.getId(), message.getSenderId(), message.getConsensusInstance(), message.getRound()));
 
-        // if (message.getPreparedValue() != null) {
-        // System.out.println("RoundChangeMessage is not valid");
-        // return;
-        // }
-
         roundChangeMessages.add(message);
 
         // Received quorum of ROUND_CHANGE. Line 11-16
@@ -472,6 +467,19 @@ public class NodeService implements UDPService {
 
         // Create new block
         Block block = this.blockCreator();
+
+        // Wait until it's this block's turn
+        while (block.getBLOCK_ID() > this.nextBlock) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format("{0} - Block {1} is not up next, wait for synchronization. Next block is {1}",
+                            config.getId(), block.getBLOCK_ID(), this.nextBlock));
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+        }
 
         synchronized (block) {
             Iterator<ClientData> iterator = block.getTransactions().iterator();
@@ -841,6 +849,15 @@ public class NodeService implements UDPService {
                     e.printStackTrace();
                 }
             }
+            // while (!blockNumberToBlockMapping.containsKey(this.nextBlock)){
+            // System.out.println("Block is not up next, wait for synchronization");
+            // System.out.println(this.nextBlock);
+            // try {
+            // Thread.sleep(500);
+            // } catch (InterruptedException e) {
+            // e.printStackTrace();
+            // }
+            // }
 
             Block blockToBeExecuted = this.blockNumberToBlockMapping.get(this.nextBlock);
             synchronized (this.blockchain) {
@@ -923,6 +940,17 @@ public class NodeService implements UDPService {
         ClientMessage confirmationMessage = new ClientMessage(config.getId(), Message.Type.CLIENT_CONFIRMATION);
         confirmationMessage.setClientData(transaction);
         link.send(transaction.getClientID(), confirmationMessage);
+
+        // Inform the reciever
+        BalanceMessage recieverConfirmation = new BalanceMessage(config.getId(),
+                Message.Type.CLIENT_RECIEVER_CONFIRMATION);
+        recieverConfirmation.setRequestedClient(destination);
+
+        recieverConfirmation.setClientId(transaction.getClientID());
+        recieverConfirmation.setRequestId(transaction.getRequestID());
+        recieverConfirmation.setBalance(amountToTransfer);
+
+        link.send(destination, recieverConfirmation);
 
         // Pay the leader
         float leaderBalance = nodeBalances.getOrDefault(this.leaderConfig.getId(), 0.0f);
