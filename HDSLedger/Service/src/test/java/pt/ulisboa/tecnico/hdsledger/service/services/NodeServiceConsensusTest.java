@@ -4,6 +4,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
+import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.api.Order;
 
 import org.mockito.Spy;
 import org.mockito.Mock;
@@ -35,10 +38,12 @@ import pt.ulisboa.tecnico.hdsledger.service.blockchain.Block;
 import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.service.blockchain.Blockchain;
 
+@TestMethodOrder(OrderAnnotation.class)
 public class NodeServiceConsensusTest extends NodeServiceBaseTest {
 
     // Test that a replayed message is not accepted for quorum
     @Test
+    @Order(1)
     private void testRejectReplayedMessage() {
         System.out.println("Reject replayed message");
 
@@ -69,8 +74,9 @@ public class NodeServiceConsensusTest extends NodeServiceBaseTest {
     // Should result in a round change
     // Will generate some socket exceptions, ignore them
     @Test
+    @Order(2)
     public void testConflictingLeaderPrePrepareMessages() {
-        System.out.println("Testing Byzantine leader sending conflicting pre-prepare messages...");
+        System.out.println("\nTesting Byzantine leader sending conflicting pre-prepare messages...");
 
         super.setupAllNodes();
         super.setupClient();
@@ -126,6 +132,7 @@ public class NodeServiceConsensusTest extends NodeServiceBaseTest {
 
     // Test that updateLeader is done correctly
     @Test
+    @Order(3)
     public void testUpdateLeader() {
         System.out.println("Update leader test...");
         String newLeaderId = "2";
@@ -152,6 +159,7 @@ public class NodeServiceConsensusTest extends NodeServiceBaseTest {
 
     // Test that commit is sent if there is a quorum of prepare messages
     @Test
+    @Order(4)
     public void testCommitOnPrepareQuorum() {
         System.out.println("Commit on valid quorum...");
         // Prevent the real send method from being called on the spy
@@ -174,6 +182,7 @@ public class NodeServiceConsensusTest extends NodeServiceBaseTest {
     // Test that a byzantine node sends invalid data
     // Should not commit, but should not crash
     @Test
+    @Order(5)
     public void testInvalidData() {
         System.out.println("Byzantine node invalid data test");
 

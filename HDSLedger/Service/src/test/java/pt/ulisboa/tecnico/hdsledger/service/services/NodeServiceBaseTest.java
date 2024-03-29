@@ -59,13 +59,14 @@ public abstract class NodeServiceBaseTest {
     protected static String nodesConfigPath = "src/test/resources/test_config.json";
     protected static String clientsConfigPath = "src/test/resources/client_test_config.json";
     protected static ProcessConfig[] nodeConfigs;
-    protected static ProcessConfig[] clientConfigs;
     protected static ProcessConfig leaderConfig;
+    protected ProcessConfig[] clientConfigs;
 
     protected static String testNodeId = "2";
     protected static String clientId = "client1";
     protected static PrivateKey clientKey;
     protected String leaderId = "1";
+
     protected Link linkSpy;
 
     protected TestableNodeService nodeService;
