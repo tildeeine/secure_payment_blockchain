@@ -260,6 +260,11 @@ public class NodeService implements UDPService {
 
         instance.setCurrentRound(instance.getCurrentRound() + 1);
 
+        if (instance.getCurrentRound() > 4) {
+            lastDecidedConsensusInstance.getAndIncrement();
+            return;
+        }
+
         sendRoundChangeMessage(instance.getCurrentRound());
 
         startTimer();
@@ -328,6 +333,11 @@ public class NodeService implements UDPService {
                     .mapToInt(entry -> entry.getRound()).min().orElseThrow();
 
             instance.setCurrentRound(newRound);
+
+            if (instance.getCurrentRound() > 4) {
+                lastDecidedConsensusInstance.getAndIncrement();
+                return;
+            }
 
             updateLeader();
 
