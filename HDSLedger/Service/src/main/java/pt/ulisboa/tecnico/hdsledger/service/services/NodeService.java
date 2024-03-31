@@ -6,7 +6,6 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SignatureException;
 import java.text.MessageFormat;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -849,25 +848,6 @@ public class NodeService implements UDPService {
 
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
-
-            // Check if block excist locally. Otherwise, wait for it
-            while (!blockNumberToBlockMapping.containsKey(this.nextBlock)) {
-                System.out.println("Block is not up next, wait for synchronization");
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-            // while (!blockNumberToBlockMapping.containsKey(this.nextBlock)){
-            // System.out.println("Block is not up next, wait for synchronization");
-            // System.out.println(this.nextBlock);
-            // try {
-            // Thread.sleep(500);
-            // } catch (InterruptedException e) {
-            // e.printStackTrace();
-            // }
-            // }
 
             Block blockToBeExecuted = this.blockNumberToBlockMapping.get(this.nextBlock);
             synchronized (this.blockchain) {
