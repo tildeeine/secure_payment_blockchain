@@ -4,7 +4,7 @@
 
 HDSLedger is a simplified permissioned (closed membership) blockchain system with high dependability
 guarantees. It uses the Istanbul BFT consensus algorithm to ensure that all nodes run commands
-in the same order, achieving State Machine Replication (SMR) and guarantees that all nodes
+in the same order, achieving State Machine Replication (SMR) and guaranteeing that all nodes
 have the same state.
 
 ## Table of Contents
@@ -29,20 +29,30 @@ have the same state.
 Both the tests and IBFT application can be ran using:
 
 ```bash
-python3 puppet-master.py
+sudo python3 puppet-master.py
 ```
-Use sudo in front if you run it from a linux machine.
+
 The setup and requirements are the same as the provided setup in the inital zip-folder. The tests are integrated and will be automatically ran when running this command. To interact with the application find the the client1 shell and enter append "some_value". This will simulate normal behaviour from the system. 
 
-The main functionality of the current system is the nodes starting consensus upon receiving an APPEND message from the Clients, which simulate normal behaviour from the IBFT algorithm. This functionality can be seen through running the project with the provided command above, then going to the Client terminal and sending an Append message by writing "append" followed by any string:
+The main functionality of the system is the transfer and balance methods from clients. We have three clients; client1, client2 and client3. to transfer money from one to another enter in the client's terminal: 
 
 ```sh
-append <STRING>
+transfer <amount> <destination>
+```
+To check the client's own balance:
+
+```sh
+balance
+```
+To check someone else's balance:
+
+```sh
+check <user>
 ```
 
 ## Tests
 
-The tests are a part of the maven build, and run automatically when you use puppet master to run the project. 
+The tests are a part of the maven build and run automatically when you use puppet master to run the project. 
 
 You will see the output of the tests under a test-banner in your terminal.
 ```sh
@@ -51,17 +61,17 @@ You will see the output of the tests under a test-banner in your terminal.
 -------------------------------------------------------
 ```
 
-We currently focus our tests on the NodeService class, since this represents the main functionality of the system, including handling and responding to different messages. This is also the class where Round Change is implemented.
+Tests can be hard to find, as the shutdown of clients and nodes instances is not done cleanly, leading to the program throwing errors. However, the tests will run. Look for the green text in the terminal, which will indicate that the tests are complete and executed correctly. 
 
-The tests can be found in `NodeServiceTest` under `Service/src/test/`. 
+The tests can be found in under `Service/src/test/`. 
 
-These four tests can be found:
+To only run the test enter:
 
- 1. Test that the uponPrePrepare method sends a PREPARE message upon receiving a PRE-PREPARE message from the leader
- 2. Test that the uponPrePrepare method does not send a PREPARE message upon receiving PRE-PREPARE message from a non-leader
- 3. Test that startConsensus initiates a new consensus instance, updates the relevant internal data structures, and broadcasts the necessary messages when the node is the leader.
- 4. Test that handleClientRequest does not start a new consensus instance when the node is not the leader.
+```sh
+sudo mvn clean test
+```
 
+For more information about the tests and their purpose, take a look in the report. 
 
 ## Requirements
 
