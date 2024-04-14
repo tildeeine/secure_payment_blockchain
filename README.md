@@ -170,3 +170,7 @@ mvn compile exec:java -Dexec.args="..."
 ## Acknowledgements
 This codebase was adapted from last year's project solution, which was kindly provided by the following group: [David Belchior](https://github.com/DavidAkaFunky), [Diogo Santos](https://github.com/DiogoSantoss), [Vasco Correia](https://github.com/Vaascoo). We thank all the group members for sharing their code.
 
+## Feedbacks
+- Clean up in general, but especially the NodeService class. Make layers of abstraction, move to other classes.
+- Add more tests for Byzantine Leaders
+- Need to send the whole message in some extra function, not just ROUND CHANGE
