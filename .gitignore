@@ -1,2 +1,78 @@
+### Build artifacts ###
 **/target/
+build/
+dist/
+
+### IDE - VS Code ###
 .vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+### Environment variables ###
+.env
+.env.*
+!.env.example
+
+### Django ###
+*.log
+*.pot
+*.pyc
+__pycache__/
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+/static/
+/media/
+
+### Django migrations ###
+**/migrations/*
+!**/migrations/__init__.py
+
+### Java ###
+*.class
+*.log
+*.ctxt
+.mtj.tmp/
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+replay_pid*
+
+### Maven ###
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+### Linux (WSL) ###
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+### Python ###
+*.py[cod]
+*$py.class
+__pycache__/
+*.so
+.Python
+env/
+.env
+.venv
+ENV/
+env.bak/
+venv.bak/
+.python-version
