@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Secure Payment Blockchain Dashboard</h1>
+    
+    <div class="control-panel">
+        <h2>Control Panel</h2>
+        <div class="button-group">
+            <a href="{% url 'start_all' %}" class="btn btn-primary">Start All</a>
+            <a href="{% url 'stop_all' %}" class="btn btn-danger">Stop All</a>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Blockchain Nodes</h2>
+                </div>
+                <div class="card-body">
+                    <div class="node-list">
+                        {% for node in nodes %}
+                            <div class="node-item {% if node.status == 'running' %}active{% endif %}">
+                                <span class="node-id">Node {{ node.node_id }}</span>
+                                <span class="node-status {{ node.status }}">{{ node.status }}</span>
+                                <div class="node-controls">
+                                    {% if node.status == 'running' %}
+                                        <button class="btn btn-sm btn-info view-logs" data-type="node" data-id="{{ node.node_id }}">View Logs</button>
+                                        <a href="{% url 'stop_node' node.node_id %}" class="btn btn-sm btn-warning">Stop</a>
+                                    {% else %}
+                                        <a href="{% url 'start_node' node.node_id %}" class="btn btn-sm btn-success">Start</a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% empty %}
+                            <p>No nodes configured.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Clients</h2>
+                </div>
+                <div class="card-body">
+                    <div class="client-list">
+                        {% for client in clients %}
+                            <div class="client-item {% if client.status == 'running' %}active{% endif %}">
+                                <span class="client-id">Client {{ client.client_id }}</span>
+                                <span class="client-status {{ client.status }}">{{ client.status }}</span>
+                                <div class="client-controls">
+                                    {% if client.status == 'running' %}
+                                        <button class="btn btn-sm btn-info view-logs" data-type="client" data-id="{{ client.client_id }}">View Logs</button>
+                                        <a href="{% url 'stop_client' client.client_id %}" class="btn btn-sm btn-warning">Stop</a>
+                                    {% else %}
+                                        <a href="{% url 'start_client' client.client_id %}" class="btn btn-sm btn-success">Start</a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% empty %}
+                            <p>No clients configured.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mt-4">
+        <div class="card-header">
+            <h2>Process Logs</h2>
+            <div id="logs-title">Select a node or client to view logs</div>
+        </div>
+        <div class="card-body">
+            <pre id="logs-container" class="logs-container"></pre>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const logButtons = document.querySelectorAll('.view-logs');
+    let logPolling = null;
+    
+    logButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const processType = this.dataset.type;
+            const processId = this.dataset.id;
+            
+            // Clear any existing polling
+            if (logPolling) clearInterval(logPolling);
+            
+            // Update the logs title
+            document.getElementById('logs-title').textContent = 
+                `${processType.charAt(0).toUpperCase() + processType.slice(1)} ${processId} Logs`;
+            
+            // Function to fetch and update logs
+            const updateLogs = () => {
+                fetch(`/logs/${processType}/${processId}/`)
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('logs-container').textContent = 
+                            data.logs.join('\n');
+                    });
+            };
+            
+            // Update immediately and then every 2 seconds
+            updateLogs();
+            logPolling = setInterval(updateLogs, 2000);
+        });
+    });
+});
+</script>
+{% endblock %}
