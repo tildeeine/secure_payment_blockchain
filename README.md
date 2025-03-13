@@ -7,6 +7,29 @@ guarantees. It uses the Istanbul BFT consensus algorithm to ensure that all node
 in the same order, achieving State Machine Replication (SMR) and guaranteeing that all nodes
 have the same state.
 
+## Structure Overview
+
+```
+secure_payment_blockchain/
+├── HDSLedger/
+│   ├── Service/                   # Service code
+│   ├── Client/                    # Client code
+│   ├── blockchain_dashboard/      # Django project
+│   │   ├── blockchain_dashboard/  # Django settings module
+│   │   ├── node_manager/          # Django app for node management
+│   │   │   ├── __init__.py
+│   │   │   ├── models.py          
+│   │   │   ├── views.py           
+│   │   │   ├── urls.py            # URL configurations
+│   │   │   └── templates/         # Templates folder
+│   │   │       └── node_manager/  
+│   │   │           └── dashboard.html  
+│   │   ├── static/                # CSS, JS files
+│   │   ├── manage.py              # Django management script
+│   │   └── requirements.txt       # Dependencies
+│   └── puppet-master.py           # Old startup script, kept for reference
+```
+
 ## Table of Contents
 
 1. [Introduction](#introduction)
@@ -31,6 +54,12 @@ Both the tests and IBFT application can be ran using:
 ```bash
 sudo python3 puppet-master.py
 ```
+
+To start the web interface, which is under development, you need to run Django using 
+```bash
+python3 manage.py runserver
+```
+The webserver will then be available at 127.0.0.1
 
 The setup and requirements are the same as the provided setup in the inital zip-folder. The tests are integrated and will be automatically ran when running this command. To interact with the application find the the client1 shell and enter append "some_value". This will simulate normal behaviour from the system. 
 
