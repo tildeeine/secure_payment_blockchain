@@ -10,19 +10,23 @@ from .models import Node, Client, ProcessLog
 # A view is a Python function that takes a Web request and returns a Web response. Can be HTML, but also CML, JSON, 404 error, etc.
 
 # Configuration files path
-SERVER_CONFIG_PATH = "../../Service/src/main/resources/regular_config.json"
-CLIENT_CONFIG_PATH = "../../Client/src/main/resources/client_config.json"
+SERVER_CONFIG_PATH = "../Service/src/main/resources/regular_config.json"
+CLIENT_CONFIG_PATH = "../Client/src/main/resources/client_config.json"
 
 # Store process objects
 node_processes = {}
 client_processes = {}
 
+setup = False
+
 def start_node(node_id, config_file="regular_config.json"):
     """Start a blockchain node with the given ID"""
+    if setup == False:
+        setup_system()
     if node_id in node_processes:
         return False  # Already running
         
-    cmd = f"cd ../../Service && mvn exec:java -Dexec.args='{node_id} {config_file}'"
+    cmd = f"cd ../Service && mvn exec:java -Dexec.args='{node_id} {config_file}'"
     process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     node_processes[node_id] = process
     
@@ -47,10 +51,12 @@ def start_node(node_id, config_file="regular_config.json"):
 
 def start_client(client_id):
     """Start a client with the given ID"""
+    if setup == False:
+        setup_system()
     if client_id in client_processes:
         return False  # Already running
         
-    cmd = f"cd ../../Client && mvn exec:java -Dexec.args='{client_id}'"
+    cmd = f"cd ../Client && mvn exec:java -Dexec.args='{client_id}'"
     process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     client_processes[client_id] = process
     
@@ -71,6 +77,22 @@ def start_client(client_id):
                 )
     
     threading.Thread(target=collect_output, daemon=True).start()
+    return True
+
+def setup_system():
+    """Compile the Java projects"""
+    global setup
+    print("Setting up system...")
+    # Use subprocess instead of os.system for better control and output capture
+    try:
+        # Navigate to the correct directory first
+        subprocess.run("cd .. && mvn clean compile", shell=True, check=True)
+        subprocess.run("cd .. && mvn clean install", shell=True, check=True)
+        setup = True
+        print("System setup completed successfully")
+    except subprocess.CalledProcessError as e:
+        print(f"Error during system setup: {e}")
+        return False
     return True
 
 def stop_node(node_id):
